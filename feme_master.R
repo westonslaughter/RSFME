@@ -4,7 +4,7 @@ library(lubridate)
 library(feather)
 library(zoo)
 
-setwd('C:/Users/gubbins/Dropbox/macrosheds/flux estimates/timing_analysis')
+setwd('C:/Users/gubbi/Dropbox/flux_estimation_methods_evaluation')
 
 ###### prep data ####
 # read in eagle creek
@@ -48,3 +48,12 @@ ggplot(ocon_chem, aes(x = date, y = nitrate_mgL))+
 ggplot(ocon_q, aes(x = date, y = q_cfs))+
     geom_line()+
     scale_y_log10()
+
+# create weekly data for testing
+chem_df <- eagle_chem %>%
+    mutate(week = floor_date(date, unit = 'week')) %>%
+    group_by(week) %>%
+    arrange(date) %>%
+    filter(row_number()==1) %>%
+    ungroup() %>%
+    select(date, nitrate_mgL)
