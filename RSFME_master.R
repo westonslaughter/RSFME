@@ -5,6 +5,11 @@ library(feather)
 library(zoo)
 library(here)
 
+### CURRENT TESTING PRIORITY
+# take 15 minute usgs data for a solute and coarsen it to weekly data
+# take 15 minute usgs q data
+# recreate all methods in MS data at their unit time step and at annual
+
 ###### prep data ####
 # read in eagle creek
 eagle <- readNWISuv('03353200', parameterCd = c('00060', '99137'),
@@ -63,7 +68,10 @@ q_df <- eagle_q %>%
     mutate(q_lps = q_cfs*28.316847) %>%
     select(date, q_lps)
 
+ws_size = eagle_ws_area_ha
+
 ###### test completed functions
+# hbef
 source('source/flux_method_hbef_daily.R')
 test_hbef <- estimate_flux_hbef_daily(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 test_hbef
@@ -75,10 +83,23 @@ ggplot(test_hbef, aes(x = date, y = flux_daily_kg_ha))+
 source('source/flux_method_hbef_annual.R')
 estimate_flux_hbef_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 
+# fernow
 source('source/flux_method_fernow_weekly.R')
 estimate_flux_fernow_weekly(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 
 source('source/flux_method_fernow_annual.R')
 estimate_flux_fernow_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 
+# santee
+source('source/flux_method_santee.R')
+estimate_flux_santee(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 
+source('source/flux_method_santee_annual.R')
+estimate_flux_santee_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+# bear
+source('source/flux_method_bear_hourly.R')
+estimate_flux_bear_hourly(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+source('source/flux_method_bear_annual.R')
+estimate_flux_bear_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
