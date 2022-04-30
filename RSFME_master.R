@@ -3,13 +3,13 @@ library(tidyverse)
 library(lubridate)
 library(feather)
 library(zoo)
-
-setwd('C:/Users/gubbi/Dropbox/flux_estimation_methods_evaluation')
+library(here)
 
 ###### prep data ####
 # read in eagle creek
 eagle <- readNWISuv('03353200', parameterCd = c('00060', '99137'),
-                    startDate = '2019-10-01', endDate = '2020-09-29')
+                    startDate = '2019-10-01', endDate = '2020-09-30',
+                    tz = 'EST')
 
 eagle_ws_area_ha <- 27453.9
 
@@ -56,4 +56,29 @@ chem_df <- eagle_chem %>%
     arrange(date) %>%
     filter(row_number()==1) %>%
     ungroup() %>%
-    select(date, nitrate_mgL)
+    select(date, con = nitrate_mgL)%>%
+    mutate(date = floor_date(date, unit = 'days'))
+
+q_df <- eagle_q %>%
+    mutate(q_lps = q_cfs*28.316847) %>%
+    select(date, q_lps)
+
+###### test completed functions
+source('source/flux_method_hbef_daily.R')
+test_hbef <- estimate_flux_hbef_daily(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+test_hbef
+
+ggplot(test_hbef, aes(x = date, y = flux_daily_kg_ha))+
+  geom_point()+
+  geom_line()
+
+source('source/flux_method_hbef_annual.R')
+estimate_flux_hbef_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+source('source/flux_method_fernow_weekly.R')
+estimate_flux_fernow_weekly(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+source('source/flux_method_fernow_annual.R')
+estimate_flux_fernow_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+
