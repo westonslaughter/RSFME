@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+riverine_solute_flux_methods_evaluation.Rproj
+/data/*
+!/data/general
