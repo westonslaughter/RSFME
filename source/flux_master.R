@@ -39,7 +39,7 @@ for(i in 1:nrow(site_data)){
     q_directory <- glue('data/raw/q_cfs')
     
     if(!dir.exists(q_directory)){
-        dir.create(q_directory)
+        dir.create(q_directory, recursive = TRUE)
     }
     
     file_path <- glue('{q_directory}/{s}.feather',
