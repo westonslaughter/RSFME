@@ -1,6 +1,4 @@
-library(lubridate)
-library(tidyverse)
-library(lfstat)
+
 #method description: q*con, with average con used between two points
 
 # create function of hbef flux estimation
