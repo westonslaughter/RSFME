@@ -98,8 +98,14 @@ all_sensors <- all_sensors %>%
     filter(site_no %in% site_info$site_no)
 
 write_csv(all_sensors, 'data/general/usgs_sensors.csv')
+# all_sensors <- read.csv('data/general/usgs_sensors.csv', colClasses = 'character')
+codes <- unique(all_sensors$site_no)
+
+sites_with_q <- dataRetrieval::whatNWISdata(siteNumber = codes, parameterCd="00060")
+
 
 site_var_data <- all_sensors %>%
+    filter(site_no %in% !!sites_with_q$site_no) %>%
     select(site_code = site_no, start_date = dateTime, parm_cd)
 
 write_csv(site_var_data, 'data/general/site_var_data.csv')

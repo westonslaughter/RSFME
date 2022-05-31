@@ -9,7 +9,8 @@ library(zoo)
 library(here)
 library(lfstat)
 
-thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
+# thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
+thinning_intervals <- c('monthly')
 vars <- c('nitrate_nitrite_mgl', 'spcond_uscm')
 
 #### download raw data #### 
@@ -20,6 +21,7 @@ site_var_data <- read.csv('data/general/site_var_data.csv', colClasses = 'charac
 n_sites <- site_var_data %>%
     filter(parm_cd == '99133')
 
+# Only want sites with continuous N 
 site_var_data <- site_var_data %>%
     filter(site_code %in% !!n_sites$site_code)
 
@@ -36,6 +38,7 @@ variable_data <- read.csv('data/general/variable_data.csv', colClasses = 'charac
 # write_csv(site_data, 'data/general/site_data.csv')
 
 # Variables
+failed_sites <- c()
 for(i in 1:nrow(site_var_data)){
     
     # Load in site info 
@@ -54,6 +57,7 @@ for(i in 1:nrow(site_var_data)){
     
     if(!paste0('X_', parm_cd, '_00000') %in% names(var_data)) {
         print('weird var found')
+        failed_sites <- c(failed_sites, site_code)
         next
     }
     
@@ -78,16 +82,31 @@ for(i in 1:nrow(site_var_data)){
 
 # Discharge 
 sites <- unique(site_var_data$site_code)
+sites <- sites[!sites %in% failed_sites]
 for(i in 1:length(sites)){
     # Download Q data 
     site_code <- sites[i]
     q_data <- readNWISuv(site_code, parameterCd = '00060')
     
-    # Incase a site has a varibale but not Q
-    if(nrow(q_data) == 0) next
+    # If there is no unit data check for daily values 
+    if(nrow(q_data) == 0) {
+        q_data <- readNWISdv(site_code, parameterCd = '00060')
+        date_name <- 'Date'
+    } else{
+        date_name <- 'dateTime'
+    }
+    
+    if(nrow(q_data) == 0) {
+        print('no Q found')
+        next
+    }
+    
+    var_names <- names(q_data)
+    var_names <- grep('X_00060', var_names, value = T)
+    var_names <- var_names[!grepl('_cd', var_names)]
     
     q_data <- q_data %>%
-        select(site_code = site_no, datetime = dateTime, val = X_00060_00000) %>%
+        select(site_code = site_no, datetime = !!date_name, val = !!var_names) %>%
         mutate(val = na.approx(val, rule = 2)) %>%
         mutate(var = 'q_cfs')
     
@@ -105,21 +124,23 @@ for(i in 1:length(sites)){
 }
 
 # get sites that have both Q and chem 
-q_sites <- list.files('data/raw/q_cfs/')
-chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
-spcond_sites <- list.files('data/raw/spcond_uscm/')
-common_sites <- q_sites[q_sites %in% chem_sites]
-common_sites <- common_sites[common_sites %in% spcond_sites]
-common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1] 
+# q_sites <- list.files('data/raw/q_cfs/')
+# chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
+# spcond_sites <- list.files('data/raw/spcond_uscm/')
+# common_sites <- q_sites[q_sites %in% chem_sites]
+# common_sites <- common_sites[common_sites %in% spcond_sites]
+# common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1] 
 
 # Filter out sites that failed to download for all parameters (Q, nitrate, and spcond)
-site_var_data <- site_var_data %>%
-    filter(site_code %in% !!common_sites)
+# site_var_data <- site_var_data %>%
+#     filter(site_code %in% !!common_sites)
 
 
 #### Thin data to desired intervals ####
 # You have more built out code for this from what I remember but I am just 
 # doing a simple thinning here as an example 
+site_var_data <- site_var_data %>%
+    filter(site_code %in% !!sites)
 
 for(i in 1:nrow(site_var_data)) {
     
@@ -173,7 +194,10 @@ for(i in 1:nrow(site_var_data)) {
 
 #### Calculate flues with various methods ####
 
-for(i in 50:nrow(site_var_data)){
+source('source/flux_method_egret_daily.R')
+source('source/flux_method_hbef_daily.R')
+
+for(i in 1:nrow(site_var_data)){
     
     site_code <- site_var_data[i,1]
     parm_cd <- site_var_data[i,3]
@@ -226,7 +250,6 @@ for(i in 50:nrow(site_var_data)){
             dir.create(directory, recursive = TRUE)
         }
         
-        source('source/flux_method_hbef_daily.R')
         hbef_flux <- try(estimate_flux_hbef_daily(chem_df = conc_data_prep, 
                                                   q_df = q_data_prep, 
                                                   ws_size = area))
@@ -243,7 +266,6 @@ for(i in 50:nrow(site_var_data)){
             dir.create(directory, recursive = TRUE)
         }
         
-        source('source/flux_method_egret_daily.R')
         egret_flux <- try(adapt_ms_egret(chem_df = conc_data_prep, 
                                          q_df = q_data_prep, 
                                          ws_size = area,
