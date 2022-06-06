@@ -336,9 +336,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
              ms_status = 0,
              ms_interp = 0) %>%
       rename(val = q_lps,
-             datetime = date) %>%
-        # Convert lps to meters cubed 
-        mutate(val = val/1000)
+             datetime = date)
     
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,

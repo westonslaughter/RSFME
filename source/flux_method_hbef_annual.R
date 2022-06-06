@@ -7,8 +7,8 @@ estimate_flux_hbef_annual <- function(chem_df, q_df, ws_size){
   # compute total flux in kg/ha and return it
   out <- flux_df %>%
     group_by(wy = water_year(date, origin = "usgs")) %>%
-    filter(n() > 360) %>%
-    summarize(flux_annual_kg_ha = sum(flux_daily_kg_ha))
+    # filter(n() > 360) %>%
+    summarize(flux_annual_kg_ha = sum(flux_daily_kg_ha, na.rm = TRUE))
     
   
   out <- out %>%

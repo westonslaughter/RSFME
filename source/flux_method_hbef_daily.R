@@ -26,9 +26,10 @@ estimate_flux_hbef_daily <- function(chem_df, q_df, ws_size){
   
   # create daily q ts to match chem ts
   daily_q <- q_df %>%
-    mutate(day = floor_date(date, unit = 'days')) %>%
+    mutate(day = lubridate::date(date)) %>%
     group_by(day) %>%
-    summarize(q_lpd = sum(q_lps*900)) %>%
+    summarize(q_lps = mean(q_lps)) %>%
+    mutate(q_lpd = q_lps*86400) %>%
     select(day, q_lpd) %>%
     filter(day >= startDate,
            day <= endDate) %>%
