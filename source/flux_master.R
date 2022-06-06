@@ -393,9 +393,9 @@ for(i in 1:nrow(site_var_data)){
         
         hbef_flux_daily <- try(estimate_flux_hbef_daily(chem_df = conc_data_prep, 
                                                         q_df = q_data_prep, 
-                                                        ws_size = area)) %>%
+                                                        ws_size = area) %>%
             mutate(wy = water_year(date, origin = 'usgs')) %>%
-            filter(wy %in% !!good_years)
+            filter(wy %in% !!good_years))
         
         if(inherits(hbef_flux_daily, 'try-error')){
         } else{
@@ -460,9 +460,9 @@ for(i in 1:nrow(site_var_data)){
         
         fernow_flux_daily <- try(estimate_flux_fernow_weekly(chem_df = conc_data_prep, 
                                                              q_df = q_data_prep, 
-                                                             ws_size = area)) %>%
+                                                             ws_size = area) %>%
             mutate(wy = water_year(date, origin = 'usgs')) %>%
-            filter(wy %in% !!good_years)
+            filter(wy %in% !!good_years))
         
         if(inherits(fernow_flux_daily, 'try-error')){
             
@@ -499,9 +499,9 @@ for(i in 1:nrow(site_var_data)){
         
         bear_flux_daily <- try(estimate_flux_bear_hourly(chem_df = conc_data_prep, 
                                                    q_df = hourly_q, 
-                                                   ws_size = area)) %>%
+                                                   ws_size = area) %>%
             mutate(wy = water_year(date, origin = 'usgs')) %>%
-            filter(wy %in% !!good_years)
+            filter(wy %in% !!good_years))
         
         if(inherits(bear_flux_daily, 'try-error')){
             
@@ -532,9 +532,9 @@ for(i in 1:nrow(site_var_data)){
         
         daily_santee_flux <- try(estimate_flux_santee(chem_df = conc_data_prep, 
                                                      q_df = hourly_q, 
-                                                     ws_size = area)) %>%
+                                                     ws_size = area) %>%
             mutate(wy = water_year(date, origin = 'usgs')) %>%
-            filter(wy %in% !!good_years)
+            filter(wy %in% !!good_years))
         
         if(inherits(daily_santee_flux, 'try-error')){
         } else{
