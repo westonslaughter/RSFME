@@ -6,7 +6,7 @@ library(ggthemes)
 
 read_add_site <- function(flux_f){
     
-    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,7]
+    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,8]
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     fluxes <- read_feather(flux_f) %>%
         mutate(site_code = !!site_code) %>%
@@ -20,11 +20,11 @@ read_add_site <- function(flux_f){
 
 #### Nitrate Nitrite as N ####
 ## True fluxes 
-real_fluxes_f <- list.files('data/fluxes/true/nitrate_nitrite_mgl/', full.names = TRUE)
+real_fluxes_f <- list.files('data/fluxes/annual/true/nitrate_nitrite_mgl/', full.names = TRUE)
 
 real_fluxes <- tibble()
 for(i in 1:length(real_fluxes_f)){
-    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,6]
+    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,7]
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     real_fluxes_this <- read_feather(real_fluxes_f[i]) %>%
         mutate(site_code = !!site_code)
@@ -40,7 +40,7 @@ site_data <- read_csv('data/general/site_data.csv') %>%
 
 
 ## Daily 
-daily_fluxes_f <- list.files('data/fluxes/daily/nitrate_nitrite_mgl/', 
+daily_fluxes_f <- list.files('data/fluxes/annual/daily/nitrate_nitrite_mgl/', 
                               full.names = TRUE,
                               recursive = TRUE)
 
@@ -50,7 +50,7 @@ daily_fluxes <- map_dfr(daily_fluxes_f, read_add_site) %>%
     mutate(thinning = 'daily')
 
 ## Weekely 
-weekly_fluxes_f <- list.files('data/fluxes/weekly/nitrate_nitrite_mgl/', 
+weekly_fluxes_f <- list.files('data/fluxes/annual/weekly/nitrate_nitrite_mgl/', 
                               full.names = TRUE,
                               recursive = TRUE)
 
@@ -61,7 +61,7 @@ weekly_fluxes <- map_dfr(weekly_fluxes_f, read_add_site) %>%
 
 
 ## Biweekly
-biweekly_fluxes_f <- list.files('data/fluxes/biweekly/nitrate_nitrite_mgl/', 
+biweekly_fluxes_f <- list.files('data/fluxes/annual/biweekly/nitrate_nitrite_mgl/', 
                               full.names = TRUE,
                               recursive = TRUE)
 
@@ -71,7 +71,7 @@ biweekly_fluxes <- map_dfr(biweekly_fluxes_f, read_add_site) %>%
     mutate(thinning = 'biweekly')
 
 ## Monthly
-monthly_fluxes_f <- list.files('data/fluxes/monthly/nitrate_nitrite_mgl/', 
+monthly_fluxes_f <- list.files('data/fluxes/annual/monthly/nitrate_nitrite_mgl/', 
                                 full.names = TRUE,
                                 recursive = TRUE)
 
@@ -147,11 +147,11 @@ ggsave(plot = n_wrtds, filename = 'plots/n_wrtds_methods.png', height = 6)
 
 #### Spefic COnductivity ####
 ## True fluxes 
-real_fluxes_f <- list.files('data/fluxes/true/spcond_uscm/', full.names = TRUE)
+real_fluxes_f <- list.files('data/fluxes/annual/true/spcond_uscm/', full.names = TRUE)
 
 real_fluxes <- tibble()
 for(i in 1:length(real_fluxes_f)){
-    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,6]
+    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,7]
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     real_fluxes_this <- read_feather(real_fluxes_f[i]) %>%
         mutate(site_code = !!site_code)
@@ -167,7 +167,7 @@ site_data <- read_csv('data/general/site_data.csv') %>%
 
 
 ## Daily 
-daily_fluxes_f <- list.files('data/fluxes/daily/spcond_uscm/', 
+daily_fluxes_f <- list.files('data/fluxes/annual/daily/spcond_uscm/', 
                              full.names = TRUE,
                              recursive = TRUE)
 
@@ -177,7 +177,7 @@ daily_fluxes <- map_dfr(daily_fluxes_f, read_add_site) %>%
     mutate(thinning = 'daily')
 
 ## Weekely 
-weekly_fluxes_f <- list.files('data/fluxes/weekly/spcond_uscm/', 
+weekly_fluxes_f <- list.files('data/fluxes/annual/weekly/spcond_uscm/', 
                               full.names = TRUE,
                               recursive = TRUE)
 
@@ -188,7 +188,7 @@ weekly_fluxes <- map_dfr(weekly_fluxes_f, read_add_site) %>%
 
 
 ## Biweekly
-biweekly_fluxes_f <- list.files('data/fluxes/biweekly/spcond_uscm/', 
+biweekly_fluxes_f <- list.files('data/fluxes/annual/biweekly/spcond_uscm/', 
                                 full.names = TRUE,
                                 recursive = TRUE)
 
@@ -198,7 +198,7 @@ biweekly_fluxes <- map_dfr(biweekly_fluxes_f, read_add_site) %>%
     mutate(thinning = 'biweekly')
 
 ## Monthly
-monthly_fluxes_f <- list.files('data/fluxes/monthly/spcond_uscm/', 
+monthly_fluxes_f <- list.files('data/fluxes/annual/monthly/spcond_uscm/', 
                                full.names = TRUE,
                                recursive = TRUE)
 
