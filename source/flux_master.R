@@ -13,13 +13,12 @@ library(lfstat)
 thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
 vars <- c('nitrate_nitrite_mgl', 'spcond_uscm')
 
-#### download raw data #### 
 # Read in site data 
 # (Sites were identified with the identify_usgs_gauges.R script)
 site_var_data <- read.csv('data/general/site_var_data.csv', colClasses = 'character') %>%
     filter(parm_cd %in% c('00095', '99133')) %>%
     distinct(site_code, parm_cd, .keep_all = T)
-    
+
 n_sites <- site_var_data %>%
     filter(parm_cd == '99133')
 
@@ -30,6 +29,9 @@ site_var_data <- site_var_data %>%
 
 site_data <- read.csv('data/general/site_data.csv', colClasses = 'character')
 variable_data <- read.csv('data/general/variable_data.csv', colClasses = 'character')
+
+
+#### download raw data #### 
 
 # get site areas, lat, and long
 # areas <- dataRetrieval::readNWISsite(site_data$site_code) %>%
@@ -252,9 +254,13 @@ for(i in 1:nrow(site_var_data)) {
 
 source('source/flux_method_egret_daily.R')
 source('source/flux_method_hbef_annual.R')
+source('source/flux_method_hbef_daily.R')
 source('source/flux_method_fernow_annual.R')
+source('source/flux_method_fernow_weekly.R')
 source('source/flux_method_bear_annual.R')
+source('source/flux_method_bear_hourly.R')
 source('source/flux_method_santee_annual.R')
+source('source/flux_method_santee.R')
 
 for(i in 1:nrow(site_var_data)){
     
@@ -324,19 +330,31 @@ for(i in 1:nrow(site_var_data)){
         rename(Q = val) %>%
         select(datetime, Q)
     
-    true_flux <- full_join(q_data_raw, conc_data_raw) %>%
+    # These units are kg/ha/day
+    true_flux_daily <- full_join(q_data_raw, conc_data_raw) %>%
         mutate(Q = Q*28.316847) %>%
         mutate(flux = ((Q*.data[[var]])/1000000)*60*15) %>%
         mutate(wy = water_year(datetime, origin = "usgs")) %>%
-        filter(wy %in% !!good_years) %>%
+        filter(wy %in% !!good_years) 
+    
+    # These units are kg/ha/yr
+    true_flux_annual <- true_flux_daily %>%
         group_by(wy) %>%
         summarise(flux_annual_kg_ha = sum(flux, na.rm = TRUE)) %>%
         mutate(flux_annual_kg_ha = flux_annual_kg_ha/area) %>%
         mutate(method = 'real')
     
-    dir.create(glue('data/fluxes/true/{var}'))
-    write_feather(true_flux, glue('data/fluxes/true/{var}/{site_code}.feather'))
-        
+    if(!dir.exists(glue('data/fluxes/daily/true/{var}'))){
+        dir.create(glue('data/fluxes/daily/true/{var}'), recursive = TRUE)
+    }
+    
+    write_feather(true_flux_daily, glue('data/fluxes/daily/true/{var}/{site_code}.feather'))
+    
+    if(!dir.exists(glue('data/fluxes/annual/true/{var}'))){
+        dir.create(glue('data/fluxes/annual/true/{var}'), recursive = TRUE)
+    }
+    
+    write_feather(true_flux_annual, glue('data/fluxes/annual/true/{var}/{site_code}.feather'))
     
     for(t in 1:length(thinning_intervals)){
         
@@ -368,28 +386,43 @@ for(i in 1:nrow(site_var_data)){
         ## Flux Methods
         
         # HBEF
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/hbef/')
-        if(!dir.exists(directory)){
-            dir.create(directory, recursive = TRUE)
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/hbef/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
         }
         
-        hbef_flux <- try(estimate_flux_hbef_annual(chem_df = conc_data_prep, 
-                                                   q_df = q_data_prep, 
-                                                   ws_size = area)) %>%
+        hbef_flux_daily <- try(estimate_flux_hbef_daily(chem_df = conc_data_prep, 
+                                                        q_df = q_data_prep, 
+                                                        ws_size = area) %>%
+            mutate(wy = water_year(date, origin = 'usgs')) %>%
+            filter(wy %in% !!good_years))
+        
+        if(inherits(hbef_flux_daily, 'try-error')){
+        } else{
+            write_feather(hbef_flux_daily, glue('{daily_directory}/{site_code}.feather'))
+        }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/hbef/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        
+        hbef_flux_annual <- try(estimate_flux_hbef_annual(chem_df = conc_data_prep, 
+                                                          q_df = q_data_prep, 
+                                                          ws_size = area)) %>%
             filter(wy %in% !!good_years)
         
-        if(inherits(hbef_flux, 'try-error')){
-        
+        if(inherits(hbef_flux_annual, 'try-error')){
         } else{
-            write_feather(hbef_flux, glue('{directory}/{site_code}.feather'))
+            write_feather(hbef_flux_annual, glue('{annual_directory}/{site_code}.feather'))
         }
         
         # EGRET (WRTDS) 
-        directory_raw <- glue('data/fluxes/{thinning_interval}/{var}/egret_raw/')
+        directory_raw <- glue('data/fluxes/daily/{thinning_interval}/{var}/egret/')
         if(!dir.exists(directory_raw)){
             dir.create(directory_raw, recursive = TRUE)
         }
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/egret_annual/')
+        directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/egret/')
         if(!dir.exists(directory)){
             dir.create(directory, recursive = TRUE)
         }
@@ -420,26 +453,43 @@ for(i in 1:nrow(site_var_data)){
         
         
         # Fernow 
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/fernow/')
-        if(!dir.exists(directory)){
-            dir.create(directory, recursive = TRUE)
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/fernow/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
         }
         
-        fernow_flux <- try(estimate_flux_fernow_annual(chem_df = conc_data_prep, 
-                                                   q_df = q_data_prep, 
-                                                   ws_size = area)) %>%
-            filter(wy %in% !!good_years)
+        fernow_flux_daily <- try(estimate_flux_fernow_weekly(chem_df = conc_data_prep, 
+                                                             q_df = q_data_prep, 
+                                                             ws_size = area) %>%
+            mutate(wy = water_year(date, origin = 'usgs')) %>%
+            filter(wy %in% !!good_years))
         
-        if(inherits(fernow_flux, 'try-error')){
+        if(inherits(fernow_flux_daily, 'try-error')){
             
         } else{
-            write_feather(fernow_flux, glue('{directory}/{site_code}.feather'))
+            write_feather(fernow_flux_daily, glue('{daily_directory}/{site_code}.feather'))
+        }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/fernow/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        
+        fernow_flux_annual <- try(estimate_flux_fernow_annual(chem_df = conc_data_prep, 
+                                                              q_df = q_data_prep, 
+                                                              ws_size = area)) %>%
+            filter(wy %in% !!good_years)
+        
+        if(inherits(fernow_flux_annual, 'try-error')){
+            
+        } else{
+            write_feather(fernow_flux_annual, glue('{annual_directory}/{site_code}.feather'))
         }
         
         # Bear 
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/bear/')
-        if(!dir.exists(directory)){
-            dir.create(directory, recursive = TRUE)
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/bear/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
         }
         
         hourly_q <- q_data_raw %>%
@@ -447,35 +497,64 @@ for(i in 1:nrow(site_var_data)){
                    q_lps = Q*28.316847) %>%
             select(site_code, date = datetime, q_lps)
         
-        bear_flux <- try(estimate_flux_bear_annual(chem_df = conc_data_prep, 
+        bear_flux_daily <- try(estimate_flux_bear_hourly(chem_df = conc_data_prep, 
                                                    q_df = hourly_q, 
-                                                   ws_size = area)) %>%
-            filter(wy %in% !!good_years)
+                                                   ws_size = area) %>%
+            mutate(wy = water_year(date, origin = 'usgs')) %>%
+            filter(wy %in% !!good_years))
         
-        if(inherits(bear_flux, 'try-error')){
+        if(inherits(bear_flux_daily, 'try-error')){
             
         } else{
-            write_feather(bear_flux, glue('{directory}/{site_code}.feather'))
+            write_feather(bear_flux_daily, glue('{daily_directory}/{site_code}.feather'))
+        }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/bear/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        
+        bear_flux_annual <- try(estimate_flux_bear_annual(chem_df = conc_data_prep, 
+                                                          q_df = hourly_q, 
+                                                          ws_size = area)) %>%
+            filter(wy %in% !!good_years)
+        
+        if(inherits(bear_flux_annual, 'try-error')){
+        } else{
+            write_feather(bear_flux_annual, glue('{annual_directory}/{site_code}.feather'))
         }
         
         # Santee
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/santee/')
-        if(!dir.exists(directory)){
-            dir.create(directory, recursive = TRUE)
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/santee/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
         }
         
-        santee_flux <- try(estimate_flux_santee_annual(chem_df = conc_data_prep, 
+        daily_santee_flux <- try(estimate_flux_santee(chem_df = conc_data_prep, 
                                                      q_df = hourly_q, 
-                                                     ws_size = area)) %>%
+                                                     ws_size = area) %>%
+            mutate(wy = water_year(date, origin = 'usgs')) %>%
+            filter(wy %in% !!good_years))
+        
+        if(inherits(daily_santee_flux, 'try-error')){
+        } else{
+            write_feather(daily_santee_flux, glue('{daily_directory}/{site_code}.feather'))
+        }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/santee/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        annual_santee_flux <- try(estimate_flux_santee_annual(chem_df = conc_data_prep, 
+                                                              q_df = hourly_q, 
+                                                              ws_size = area)) %>%
             filter(wy %in% !!good_years)
         
-        if(inherits(santee_flux, 'try-error')){
-            
+        if(inherits(annual_santee_flux, 'try-error')){
         } else{
-            write_feather(santee_flux, glue('{directory}/{site_code}.feather'))
+            write_feather(annual_santee_flux, glue('{annual_directory}/{site_code}.feather'))
         }
     }
-    
 }
  
 
