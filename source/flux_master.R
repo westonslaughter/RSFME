@@ -8,6 +8,8 @@ library(feather)
 library(zoo)
 library(here)
 library(lfstat)
+library(RiverLoad)
+library(lfstat)
 
 # thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
 thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
@@ -128,17 +130,18 @@ for(i in 1:length(sites)){
     
 }
 
+# skip to here if rerunning
 # get sites that have both Q and chem 
-# q_sites <- list.files('data/raw/q_cfs/')
-# chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
-# spcond_sites <- list.files('data/raw/spcond_uscm/')
-# common_sites <- q_sites[q_sites %in% chem_sites]
-# common_sites <- common_sites[common_sites %in% spcond_sites]
-# common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1] 
+q_sites <- list.files('data/raw/q_cfs/')
+chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
+spcond_sites <- list.files('data/raw/spcond_uscm/')
+common_sites <- q_sites[q_sites %in% chem_sites]
+common_sites <- common_sites[common_sites %in% spcond_sites]
+common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1]
 
 # Filter out sites that failed to download for all parameters (Q, nitrate, and spcond)
-# site_var_data <- site_var_data %>%
-#     filter(site_code %in% !!common_sites)
+site_var_data <- site_var_data %>%
+    filter(site_code %in% !!common_sites)
 
 
 #### Thin data to desired intervals ####
@@ -553,6 +556,38 @@ for(i in 1:nrow(site_var_data)){
         if(inherits(annual_santee_flux, 'try-error')){
         } else{
             write_feather(annual_santee_flux, glue('{annual_directory}/{site_code}.feather'))
+        }
+        # Beale 
+        directory <- glue('data/fluxes/{thinning_interval}/{var}/beale/')
+        if(!dir.exists(directory)){
+            dir.create(directory, recursive = TRUE)
+        }
+
+        conv_q <- q_data_raw %>%
+            mutate(site_code = !!site_code,
+                   flow = Q/35.3147) %>% # convert to cubic meters per second)
+            select(datetime, flow) %>%
+            data.frame()
+        
+        conv_c <- conc_data_prep %>%
+            mutate(datetime = as.POSIXct(date, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
+            select(datetime, con) %>%
+            data.frame()
+        
+        db <- full_join(conv_q, conv_c, by = "datetime") %>%
+            filter(!is.na(flow)) %>%
+            arrange(datetime)
+    
+        beale.ratio(db, 1)
+        
+
+        beale_flux <- try(beale.ratio(db, 1)) %>%
+            filter(wy %in% !!good_years)
+
+        if(inherits(bear_flux, 'try-error')){
+
+        } else{
+            write_feather(bear_flux, glue('{directory}/{site_code}.feather'))
         }
     }
 }

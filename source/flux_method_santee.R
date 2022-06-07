@@ -1,6 +1,3 @@
-library(lubridate)
-library(tidyverse)
-library(lfstat)
 # method description: weekly/biweekly sample*cumulative q over that time, no interpolation
 
 # create function of weekly flux estimation
