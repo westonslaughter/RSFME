@@ -133,16 +133,16 @@ for(i in 1:length(sites)){
 
 # skip to here if rerunning
 # get sites that have both Q and chem 
-q_sites <- list.files('data/raw/q_cfs/')
-chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
-spcond_sites <- list.files('data/raw/spcond_uscm/')
-common_sites <- q_sites[q_sites %in% chem_sites]
-common_sites <- common_sites[common_sites %in% spcond_sites]
-common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1]
+# q_sites <- list.files('data/raw/q_cfs/')
+# chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
+# spcond_sites <- list.files('data/raw/spcond_uscm/')
+# common_sites <- q_sites[q_sites %in% chem_sites]
+# common_sites <- common_sites[common_sites %in% spcond_sites]
+# common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1]
 
 # Filter out sites that failed to download for all parameters (Q, nitrate, and spcond)
-site_var_data <- site_var_data %>%
-    filter(site_code %in% !!common_sites)
+# site_var_data <- site_var_data %>%
+#     filter(site_code %in% !!common_sites)
 
 
 #### Thin data to desired intervals ####
@@ -253,7 +253,7 @@ for(i in 1:nrow(site_var_data)) {
     }
 }
 
-
+#load('20220608_environment.RData')
 #### Calculate flues with various methods ####
 source('source/helper_functions.R')
 source('source/flux_method_egret_daily.R')
@@ -270,7 +270,7 @@ source('source/flux_method_beale_annual.R')
 source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
-for(i in 1:nrow(site_var_data)){
+for(i in 10:nrow(site_var_data)){
     
     site_code <- site_var_data[i,1]
     parm_cd <- site_var_data[i,3]
@@ -469,7 +469,6 @@ for(i in 1:nrow(site_var_data)){
         fernow_flux_daily <- try(estimate_flux_fernow_weekly(chem_df = conc_data_prep, 
                                                              q_df = q_data_prep, 
                                                              ws_size = area) %>%
-            mutate(wy = water_year(date, origin = 'usgs')) %>%
             filter(wy %in% !!good_years))
         
         if(inherits(fernow_flux_daily, 'try-error')){
@@ -626,6 +625,8 @@ for(i in 1:nrow(site_var_data)){
         
         
     }
+    
+    print(paste(site_code, ' done!'))
 }
  
 
