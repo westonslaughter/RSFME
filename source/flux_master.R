@@ -10,6 +10,7 @@ library(here)
 library(lfstat)
 library(RiverLoad)
 library(lfstat)
+library(imputeTS)
 
 # thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
 thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
@@ -254,16 +255,20 @@ for(i in 1:nrow(site_var_data)) {
 
 
 #### Calculate flues with various methods ####
-
+source('source/helper_functions.R')
 source('source/flux_method_egret_daily.R')
 source('source/flux_method_hbef_annual.R')
 source('source/flux_method_hbef_daily.R')
 source('source/flux_method_fernow_annual.R')
 source('source/flux_method_fernow_weekly.R')
 source('source/flux_method_bear_annual.R')
-source('source/flux_method_bear_hourly.R')
+source('source/flux_method_bear.R')
 source('source/flux_method_santee_annual.R')
 source('source/flux_method_santee.R')
+source('source/flux_method_beale_monthly.R')
+source('source/flux_method_beale_annual.R')
+source('source/flux_method_rating_daily.R')
+source('source/flux_method_rating_annual.R')
 
 for(i in 1:nrow(site_var_data)){
     
@@ -495,13 +500,13 @@ for(i in 1:nrow(site_var_data)){
             dir.create(daily_directory, recursive = TRUE)
         }
         
-        hourly_q <- q_data_raw %>%
+        conv_q <- q_data_raw %>%
             mutate(site_code = !!site_code,
                    q_lps = Q*28.316847) %>%
             select(site_code, date = datetime, q_lps)
         
-        bear_flux_daily <- try(estimate_flux_bear_hourly(chem_df = conc_data_prep, 
-                                                   q_df = hourly_q, 
+        bear_flux_daily <- try(estimate_flux_bear(chem_df = conc_data_prep, 
+                                                   q_df = conv_q, 
                                                    ws_size = area) %>%
             mutate(wy = water_year(date, origin = 'usgs')) %>%
             filter(wy %in% !!good_years))
@@ -518,7 +523,7 @@ for(i in 1:nrow(site_var_data)){
         }
         
         bear_flux_annual <- try(estimate_flux_bear_annual(chem_df = conc_data_prep, 
-                                                          q_df = hourly_q, 
+                                                          q_df = conv_q, 
                                                           ws_size = area)) %>%
             filter(wy %in% !!good_years)
         
@@ -534,10 +539,9 @@ for(i in 1:nrow(site_var_data)){
         }
         
         daily_santee_flux <- try(estimate_flux_santee(chem_df = conc_data_prep, 
-                                                     q_df = hourly_q, 
+                                                     q_df = q_data_prep, 
                                                      ws_size = area) %>%
-            mutate(wy = water_year(date, origin = 'usgs')) %>%
-            filter(wy %in% !!good_years))
+                                     filter(wy %in% !!good_years))
         
         if(inherits(daily_santee_flux, 'try-error')){
         } else{
@@ -549,7 +553,7 @@ for(i in 1:nrow(site_var_data)){
             dir.create(annual_directory, recursive = TRUE)
         }
         annual_santee_flux <- try(estimate_flux_santee_annual(chem_df = conc_data_prep, 
-                                                              q_df = hourly_q, 
+                                                              q_df = q_data_prep, 
                                                               ws_size = area)) %>%
             filter(wy %in% !!good_years)
         
@@ -557,38 +561,70 @@ for(i in 1:nrow(site_var_data)){
         } else{
             write_feather(annual_santee_flux, glue('{annual_directory}/{site_code}.feather'))
         }
-        # Beale 
-        directory <- glue('data/fluxes/{thinning_interval}/{var}/beale/')
-        if(!dir.exists(directory)){
-            dir.create(directory, recursive = TRUE)
+        
+        # Beale
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/beale/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
         }
-
-        conv_q <- q_data_raw %>%
-            mutate(site_code = !!site_code,
-                   flow = Q/35.3147) %>% # convert to cubic meters per second)
-            select(datetime, flow) %>%
-            data.frame()
         
-        conv_c <- conc_data_prep %>%
-            mutate(datetime = as.POSIXct(date, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
-            select(datetime, con) %>%
-            data.frame()
-        
-        db <- full_join(conv_q, conv_c, by = "datetime") %>%
-            filter(!is.na(flow)) %>%
-            arrange(datetime)
-    
-        beale.ratio(db, 1)
-        
-
-        beale_flux <- try(beale.ratio(db, 1)) %>%
+        monthly_beale_flux <- try(estimate_flux_beale_monthly(chem_df = conc_data_prep,
+                                     q_df = q_data_raw,
+                                     ws_size = area)) %>%
             filter(wy %in% !!good_years)
-
-        if(inherits(bear_flux, 'try-error')){
-
+        
+        if(inherits(monthly_beale_flux, 'try-error')){
         } else{
-            write_feather(bear_flux, glue('{directory}/{site_code}.feather'))
+            write_feather(monthly_beale_flux, glue('{daily_directory}/{site_code}.feather'))
         }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/beale/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        annual_beale_flux <- try(estimate_flux_beale_annual(chem_df = conc_data_prep, 
+                                                              q_df = q_data_raw, 
+                                                              ws_size = area) %>%
+                                     filter(wy %in% !!good_years)) 
+            
+        
+        if(inherits(annual_beale_flux, 'try-error')){
+        } else{
+            write_feather(annual_beale_flux, glue('{annual_directory}/{site_code}.feather'))
+        }
+        
+        # Rating 
+        daily_directory <- glue('data/fluxes/daily/{thinning_interval}/{var}/rating/')
+        if(!dir.exists(daily_directory)){
+            dir.create(daily_directory, recursive = TRUE)
+        }
+        
+        daily_rating_flux <- try(estimate_flux_rating_daily(chem_df = conc_data_prep,
+                                                              q_df = q_data_prep,
+                                                              ws_size = area)) %>%
+            filter(wy %in% !!good_years)
+        
+        if(inherits(daily_rating_flux, 'try-error')){
+        } else{
+            write_feather(daily_rating_flux, glue('{daily_directory}/{site_code}.feather'))
+        }
+        
+        annual_directory <- glue('data/fluxes/annual/{thinning_interval}/{var}/rating/')
+        if(!dir.exists(annual_directory)){
+            dir.create(annual_directory, recursive = TRUE)
+        }
+        annual_rating_flux <- try(estimate_flux_rating_annual(chem_df = conc_data_prep, 
+                                                            q_df = q_data_raw, 
+                                                            ws_size = area) %>%
+                                     filter(wy %in% !!good_years)) 
+        
+        
+        if(inherits(annual_beale_flux, 'try-error')){
+        } else{
+            write_feather(annual_beale_flux, glue('{annual_directory}/{site_code}.feather'))
+        }
+        
+        
     }
 }
  
