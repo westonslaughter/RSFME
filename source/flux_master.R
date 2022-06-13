@@ -37,12 +37,15 @@ variable_data <- read.csv('data/general/variable_data.csv', colClasses = 'charac
 #### download raw data #### 
 
 # get site areas, lat, and long
-# areas <- dataRetrieval::readNWISsite(site_data$site_code) %>%
-#     select(site_no, drain_area_va, dec_lat_va, dec_long_va) %>%
-#     mutate(ws_area_ha = drain_area_va*259) %>%
-#     select(site_code = site_no, ws_area_ha, lat = dec_lat_va, long = dec_long_va)
-# site_data <- left_join(site_data, areas)
-# write_csv(site_data, 'data/general/site_data.csv')
+areas <- dataRetrieval::readNWISsite(site_data$site_code) %>%
+    select(site_no, drain_area_va, dec_lat_va, dec_long_va) %>%
+    mutate(ws_area_ha = drain_area_va*259) %>%
+    select(site_code = site_no, ws_area_ha, lat = dec_lat_va, long = dec_long_va)
+site_data <- left_join(site_data, areas)
+write_csv(site_data, 'data/general/site_data.csv')
+
+# get site flashiness index
+# get site ecogeographic region
 
 # Variables
 failed_sites <- c()
@@ -273,7 +276,7 @@ for(i in 1:nrow(site_var_data)) {
 }
 
 #load('20220608_environment.RData')
-#### Calculate flues with various methods ####
+#### Calculate fluxes with various methods ####
 source('source/helper_functions.R')
 source('source/flux_method_egret_daily.R')
 source('source/flux_method_hbef_annual.R')
