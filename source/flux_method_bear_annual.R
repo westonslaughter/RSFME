@@ -5,7 +5,7 @@ estimate_flux_bear_annual <- function(chem_df, q_df, ws_size){
   # compute total flux in kg/ha and return it
   out <- flux_df %>%
     group_by(wy = water_year(date, origin = "usgs")) %>%
-    summarize(flux_annual_kg_ha = sum(flux_kg_ha))
+    summarize(flux = sum(flux))
   
   out <- out %>%
     mutate(method = 'bear')

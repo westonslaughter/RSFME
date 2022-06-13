@@ -26,7 +26,8 @@ estimate_flux_rating_daily <- function(chem_df, q_df, ws_size){
         full_join(., q_df, by = c('date', 'site_code')) %>%
         mutate(flux_kg_ha = ((con*q_lps*86400)/(1e6*ws_size)),
                method = 'rating') %>%
-        select(site_code, date, flux_kg_ha, method, wy) 
+        ungroup() %>%
+        select(date, flux = flux_kg_ha, method, wy) 
     
     return(flux_df)
 }

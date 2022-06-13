@@ -16,6 +16,7 @@ beale <- read_feather(paste0('data/fluxes/daily/biweekly/nitrate_nitrite_mgl/bea
            flux = flux/1000) %>%
     select(date, flux, method, wy)
 
+# bear should be fixed now
 bear <- read_feather(paste0('data/fluxes/daily/biweekly/nitrate_nitrite_mgl/bear/', site_no,'.feather')) %>%
     mutate(flux = flux_kg_ha*60*15) %>%
     select(date, flux, method,wy)
@@ -50,3 +51,11 @@ ggplot(dat, aes(x = date, y = flux, color = method))+
     geom_point()+
     scale_y_log10()
 
+
+### main loop tests
+daily_egret_flux <- egret_flux$Daily%>%
+    mutate(flux = FluxDay/(!!area), method = 'wrtds',
+           wy = water_year(Date, origin = 'usgs')) %>%
+    select(date = Date, flux, method, wy)
+test <- rbind(true_flux_daily, daily_beale_flux, bear_flux_daily, hbef_flux_daily, daily_santee_flux, daily_rating_flux, daily_egret_flux)
+ggplot(filter(test, wy == 2017), aes(x = date, y = flux, color = method)) + geom_point() + scale_y_log10()

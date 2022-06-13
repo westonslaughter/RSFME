@@ -6,7 +6,7 @@ estimate_flux_santee_annual <- function(chem_df, q_df, ws_size){
   out <- flux_df %>%
     group_by(wy) %>%
     #filter(n() > 360) %>%
-    summarize(flux_kg_ha = sum(flux_kg_ha))
+    summarize(flux = sum(flux))
   
   out <- out %>%
     mutate(method = 'santee')

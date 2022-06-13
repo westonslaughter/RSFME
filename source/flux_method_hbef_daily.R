@@ -39,9 +39,9 @@ estimate_flux_hbef_daily <- function(chem_df, q_df, ws_size){
   flux_df <- out_df %>%
     full_join(., daily_q, by = 'date') %>%
     mutate(con_est = as.numeric(con_est),
-           flux_daily_kg_ha = con_est*q_lpd*1e-6/ws_size,
+           flux = con_est*q_lpd*1e-6/ws_size,
            method = 'hbef') %>%
-    select(date, flux_daily_kg_ha, method)
+    select(date, flux, method)
 
   return(flux_df)
 }
