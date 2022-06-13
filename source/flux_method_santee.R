@@ -1,9 +1,5 @@
-library(lubridate)
-library(tidyverse)
-library(lfstat)
 # method description: weekly/biweekly sample*cumulative q over that time, no interpolation
 
-# create function of weekly flux estimation
 estimate_flux_santee <- function(chem_df, q_df, ws_size){
   
  # Join chem and q
@@ -29,14 +25,14 @@ estimate_flux_santee <- function(chem_df, q_df, ws_size){
        filter(date <= sampleDate) %>%
        summarize(q = sum(q_lps*900)) %>%
        .$q
-     
+     out_df$periodStartDate[ind[i]] <- join_df$date[[1]]
    }else{
     #find previous sample date
     prevSampleDate <- join_df$date[[ind[i-1]]] 
     q_total <-  join_df %>%
       filter(date <= sampleDate,
              date > prevSampleDate) %>%
-      summarize(q = sum(q_lps*900)) %>%
+      summarize(q = sum(q_lps*86400)) %>%
       .$q
     out_df$periodStartDate[ind[i]] <- prevSampleDate
    }
@@ -47,8 +43,9 @@ estimate_flux_santee <- function(chem_df, q_df, ws_size){
  }
 
  flux_df <- out_df %>%
-    mutate(method = 'santee') %>%
-    select(date, periodStartDate, sampleDate, flux_kg_ha, method) %>%
+    mutate(method = 'santee',
+           wy = water_year(date, origin = 'usgs')) %>%
+    select(date, flux_kg_ha, periodStartDate, sampleDate, method, wy) %>%
     filter(!is.na(flux_kg_ha))
  
   return(flux_df)

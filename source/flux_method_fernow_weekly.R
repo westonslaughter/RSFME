@@ -32,7 +32,9 @@ estimate_flux_fernow_weekly <- function(chem_df, q_df, ws_size){
     mutate( q_lpw = (mean_weekly_q*604800),
             flux_weekly_kg_ha = q_lpw*mean_weekly_con*1e-6/ws_size,
             method = 'fernow') %>%
-    select(date = date.y, flux_weekly_kg_ha, method)
+    select(date = date.y, flux_weekly_kg_ha, method) %>%
+      na.omit() %>%
+      mutate(wy = water_year(date, origin = 'usgs'))
   return(flux_df)
   
 }
