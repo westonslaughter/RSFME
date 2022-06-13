@@ -10,7 +10,7 @@ library(here)
 library(lfstat)
 
 # thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
-thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
+thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly')
 vars <- c('nitrate_nitrite_mgl', 'spcond_uscm')
 
 #### download raw data #### 
@@ -163,6 +163,7 @@ for(i in 1:nrow(site_var_data)) {
     
     # Loop through thinning intervals (can add if statements for each of the thinning 
     # intervals)
+    ## p <- 5
     for(p in 1:length(thinning_intervals)){
         
         if(thinning_intervals[p] == 'daily'){
@@ -243,7 +244,25 @@ for(i in 1:nrow(site_var_data)) {
             write_feather(chem_data_thin, glue('{directory}/{site}.feather'))
             
         }
-        
+
+        if(thinning_intervals[p] == 'quarterly'){
+
+            chem_data_thin <- chem_data %>%
+                filter(hour(datetime) %in% c(13:18)) %>%
+                mutate(quarter = quarters(datetime)) %>%
+                group_by(quarter) %>%
+                top_n(1, datetime)
+
+            directory <- glue('data/thinned/{var}/{t}',
+                              t = thinning_intervals[p])
+
+            if(!dir.exists(directory)){
+                dir.create(directory, recursive = TRUE)
+            }
+
+            write_feather(chem_data_thin, glue('{directory}/{site}.feather'))
+
+        }
     }
 }
 
