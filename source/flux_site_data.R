@@ -22,4 +22,5 @@ epa_eco_ii <- epa_eco %>%
 # make a feature collection of sites and their ecoregions
 site_eco <- st_intersection(site_data_sf, epa_eco_ii)
 
-# get site flashiness index
+# save
+st_write(site_eco, "data/general/site_eco.csv", layer_options = "GEOMETRY=AS_XY")
