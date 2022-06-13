@@ -44,7 +44,6 @@ areas <- dataRetrieval::readNWISsite(site_data$site_code) %>%
 site_data <- left_join(site_data, areas)
 write_csv(site_data, 'data/general/site_data.csv')
 
-# get site flashiness index
 # get site ecogeographic region
 
 # Variables
@@ -147,12 +146,34 @@ for(i in 1:length(sites)){
 # site_var_data <- site_var_data %>%
 #     filter(site_code %in% !!common_sites)
 
-
 #### Thin data to desired intervals ####
 # You have more built out code for this from what I remember but I am just 
 # doing a simple thinning here as an example 
 site_var_data <- site_var_data %>%
     filter(site_code %in% !!sites)
+
+
+# get site flashiness index
+site_RBI_df <- data.frame()
+
+for(i in 1:nrow(site_var_data)) {
+
+    site <- site_var_data$site_code[i]
+    q_data <- try(read_feather(glue('data/raw/q_cfs/{site}.feather')))
+
+    if(inherits(q_data, 'try-error')) next
+
+    parm_cd <- site_var_data$parm_cd[i]
+    var <- variable_data %>%
+        filter(usgs_parm_cd == !!parm_cd) %>%
+      pull(var)
+
+    site_RBI <- ContDataQC::RBIcalc(q_data$val)
+    output <- c(site, site_RBI)
+    site_RBI_df <- rbind(site_RBI_df, output)
+}
+
+write.csv(site_RBI_df, "data/general/site_RBI_data.csv")
 
 for(i in 1:nrow(site_var_data)) {
     
