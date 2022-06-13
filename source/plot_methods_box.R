@@ -20,11 +20,7 @@ read_add_site <- function(flux_f){
 
 #### Nitrate Nitrite as N ####
 ## True fluxes 
-<<<<<<< HEAD:source/plot_methods_box.R
 real_fluxes_f <- list.files('data/fluxes/annual/true/nitrate_nitrite_mgl', full.names = TRUE)
-=======
-real_fluxes_f <- list.files('data/fluxes/annual/true/nitrate_nitrite_mgl/', full.names = TRUE)
->>>>>>> fe37a28435088cb1cdd1c6416c7e0044b6abab26:source/plot_methods.R
 
 real_fluxes <- tibble()
 for(i in 1:length(real_fluxes_f)){
@@ -44,11 +40,7 @@ site_data <- read_csv('data/general/site_data.csv') %>%
 
 
 ## Daily 
-<<<<<<< HEAD:source/plot_methods_box.R
 daily_fluxes_f <- list.files('data/fluxes/annual/daily/nitrate_nitrite_mgl',
-=======
-daily_fluxes_f <- list.files('data/fluxes/annual/daily/nitrate_nitrite_mgl/', 
->>>>>>> fe37a28435088cb1cdd1c6416c7e0044b6abab26:source/plot_methods.R
                               full.names = TRUE,
                               recursive = TRUE)
 
