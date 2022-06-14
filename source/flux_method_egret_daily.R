@@ -1,4 +1,3 @@
-
 adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
   
     get_MonthSeq <- function(dates){
@@ -348,8 +347,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
                                         kalman = kalman, run_egret = FALSE)
     
     eList <- try(EGRET::modelEstimation(egret_results, verbose = TRUE,
-                                        minNumObs = 5,
-                                        minNumUncen = 5))
+                                        minNumObs = 4,
+                                        minNumUncen = 4))
     
     return(eList)
 }

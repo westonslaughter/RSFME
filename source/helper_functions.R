@@ -37,3 +37,28 @@ prep_usgs_for_riverload <- function(chem_df, q_df){
     return(db)
 }
 
+
+# datetime to water year quarters
+dt_to_wy_quarter <- function(datetime) {
+  tryCatch(
+    expr = {
+      date <- date(as.Date(datetime))
+
+      # divide WY into quarters
+      m <- as.integer(format(date, "%m"))
+
+      if(m %in% c(10, 11, 12)) {
+        return("Q1")
+      } else if(m %in% c(1, 2, 3)) {
+        return("Q2")
+      } else if(m %in% c(4, 5, 6)) {
+        return("Q3")
+      } else if(m %in% c(7, 8, 9)) {
+        return("Q4")
+      }
+    },
+    error = function(e) {
+      print("something went wrong in dt_to_wy_quarters() conversion")
+    }
+  )
+}
