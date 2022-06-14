@@ -285,7 +285,8 @@ for(i in 1:nrow(site_var_data)) {
                 filter(hour(datetime) %in% c(13:18)) %>%
                 mutate(quarter = quarters(datetime)) %>%
                 group_by(quarter) %>%
-                top_n(1, datetime)
+                top_n(1, datetime) %>%
+                rename(date = datetime)
 
             directory <- glue('data/thinned/{var}/{t}',
                               t = thinning_intervals[p])
@@ -333,7 +334,7 @@ source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
 
-for(i in 1:nrow(loop_frame)){
+for(i in 1:2){
     
     site_code <- loop_frame[i,1]
     parm_cd <- loop_frame[i,3]
