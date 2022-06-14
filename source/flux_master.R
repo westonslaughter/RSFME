@@ -11,6 +11,8 @@ library(lfstat)
 library(RiverLoad)
 library(lfstat)
 library(imputeTS)
+#devtools::install_github("leppott/ContDataQC")
+library(ContDataQC)
 
 # thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
 thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly')
@@ -146,34 +148,36 @@ for(i in 1:length(sites)){
 # site_var_data <- site_var_data %>%
 #     filter(site_code %in% !!common_sites)
 
-#### Thin data to desired intervals ####
-# You have more built out code for this from what I remember but I am just 
-# doing a simple thinning here as an example 
-site_var_data <- site_var_data %>%
-    filter(site_code %in% !!sites)
-
+#### Generate site flashiness info ####
 
 # get site flashiness index
 site_RBI_df <- data.frame()
 
 for(i in 1:nrow(site_var_data)) {
-
+    
     site <- site_var_data$site_code[i]
     q_data <- try(read_feather(glue('data/raw/q_cfs/{site}.feather')))
-
+    
     if(inherits(q_data, 'try-error')) next
-
+    
     parm_cd <- site_var_data$parm_cd[i]
     var <- variable_data %>%
         filter(usgs_parm_cd == !!parm_cd) %>%
-      pull(var)
-
+        pull(var)
+    
     site_RBI <- ContDataQC::RBIcalc(q_data$val)
     output <- c(site, site_RBI)
     site_RBI_df <- rbind(site_RBI_df, output)
 }
+colnames(site_RBI_df) <- c('site_no', 'RBI')
+site_RBI_df$RBI <- as.numeric(site_RBI_df$RBI) 
+write_csv(site_RBI_df, "data/general/site_RBI_data.csv")
 
-write.csv(site_RBI_df, "data/general/site_RBI_data.csv")
+#### Thin data to desired intervals ####
+# You have more built out code for this from what I remember but I am just 
+# doing a simple thinning here as an example 
+site_var_data <- site_var_data %>%
+    filter(site_code %in% !!sites)
 
 for(i in 1:nrow(site_var_data)) {
     
@@ -296,7 +300,22 @@ for(i in 1:nrow(site_var_data)) {
     }
 }
 
-#load('20220608_environment.RData')
+####set site list to calculate fluxes over ####
+
+small_sites <- site_data %>% 
+    filter(ws_area_ha < 100000) %>%
+    .$site_code
+
+flash_sites <- site_RBI_df %>% 
+    filter(RBI > 0.2) %>%
+    .$site_no
+
+loop_frame <- site_var_data %>%
+    filter(parm_cd != '00095',
+           site_code %in% small_sites
+           )
+
+#load('20220613_environment.RData')
 #### Calculate fluxes with various methods ####
 source('source/helper_functions.R')
 source('source/flux_method_egret_daily.R')
@@ -313,10 +332,11 @@ source('source/flux_method_beale_annual.R')
 source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
-for(i in 10:nrow(site_var_data)){
+
+for(i in 1:nrow(loop_frame)){
     
-    site_code <- site_var_data[i,1]
-    parm_cd <- site_var_data[i,3]
+    site_code <- loop_frame[i,1]
+    parm_cd <- loop_frame[i,3]
     var <- variable_data %>%
         filter(usgs_parm_cd == !!parm_cd) %>%
         pull(var)
