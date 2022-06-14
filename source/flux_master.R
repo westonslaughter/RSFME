@@ -15,7 +15,7 @@ library(imputeTS)
 library(ContDataQC)
 
 # thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
-thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly')
+thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')#, 'quarterly')
 vars <- c('nitrate_nitrite_mgl', 'spcond_uscm')
 
 # Read in site data 
@@ -334,7 +334,7 @@ source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
 
-for(i in 1:2){
+for(i in 1:nrow(loop_frame)){
     
     site_code <- loop_frame[i,1]
     parm_cd <- loop_frame[i,3]
@@ -403,19 +403,25 @@ for(i in 1:2){
         select(datetime, Q)
     
     # These units are kg/ha/day
-    true_flux_daily <- full_join(q_data_raw, conc_data_raw) %>%
-        mutate(Q = Q*28.316847) %>%
-        mutate(flux = ((Q*.data[[var]])/(1e6*ws_size))*60*15) %>%
+    q_data_true <- q_data_raw %>%
         group_by(date = as_date(datetime)) %>%
-        summarize(flux = sum(flux)) %>%
+        summarize(Q = mean(Q, na.rm=T))
+    conc_data_true <- conc_data_raw %>%
+        group_by(date = as_date(datetime)) %>%
+        summarize(nitrate_nitrite_mgl = mean(nitrate_nitrite_mgl, na.rm=T))
+    
+    true_flux_daily <- full_join(q_data_true, conc_data_true, by = 'date') %>%
+        mutate(Q = Q*28.316847) %>%
+        mutate(flux = ((Q*.data[[var]])/(1e6*ws_size))*86400) %>%
+        group_by(date) %>%
+        summarize(flux = sum(flux, na.rm = TRUE)) %>%
         mutate(method = 'real', wy = water_year(date, origin = "usgs")) %>%
         filter(wy %in% !!good_years) 
     
     # These units are kg/ha/yr
     true_flux_annual <- true_flux_daily %>%
         group_by(wy) %>%
-        summarise(flux_annual_kg_ha = sum(flux, na.rm = TRUE)) %>%
-        mutate(flux_annual_kg_ha = flux_annual_kg_ha/area) %>%
+        summarise(flux = sum(flux, na.rm = TRUE)) %>%
         mutate(method = 'real')
     
     if(!dir.exists(glue('data/fluxes/daily/true/{var}'))){
@@ -429,6 +435,7 @@ for(i in 1:2){
     }
     
     write_feather(true_flux_annual, glue('data/fluxes/annual/true/{var}/{site_code}.feather'))
+}
     
     for(t in 1:length(thinning_intervals)){
         
@@ -523,7 +530,7 @@ for(i in 1:2){
                 filter(wy %in% !!good_years) %>%
                 group_by(wy) %>%
                 summarise(flux_annual_kg_ha = sum(FluxDay, na.rm = TRUE)) %>%
-                mutate(flux_annual_kg_ha = (flux_annual_kg_ha/!!area)) %>%
+                mutate(flux = (flux_annual_kg_ha/!!area)) %>%
                 mutate(method = 'wrtds')
             
             write_feather(egret_annual, glue('{directory}/{site_code}.feather'))
@@ -685,9 +692,9 @@ for(i in 1:2){
                                      filter(wy %in% !!good_years)) 
         
         
-        if(inherits(annual_beale_flux, 'try-error')){
+        if(inherits(annual_rating_flux, 'try-error')){
         } else{
-            write_feather(annual_beale_flux, glue('{annual_directory}/{site_code}.feather'))
+            write_feather(annual_rating_flux, glue('{annual_directory}/{site_code}.feather'))
         }
         
         
