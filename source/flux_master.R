@@ -200,7 +200,6 @@ for(i in 1:nrow(site_var_data)) {
     
     # Loop through thinning intervals (can add if statements for each of the thinning 
     # intervals)
-    ## p <- 5
     for(p in 1:length(thinning_intervals)){
         
         if(thinning_intervals[p] == 'daily'){
