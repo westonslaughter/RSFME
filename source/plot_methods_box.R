@@ -7,12 +7,38 @@ library(ggthemes)
 read_add_site <- function(flux_f){
     
     site_code <- str_split_fixed(flux_f, '/', n = Inf)[,7]
+
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
-    fluxes <- read_feather(flux_f) %>%
-      mutate(site_code = !!site_code) %>%
+    fluxes <- read_feather(flux_f) 
+    if('flux_annual_kg_ha' %in% colnames(fluxes)){
+       fluxes <- fluxes %>%
+            rename(flux = flux_annual_kg_ha)
+        }
+    fluxes <- fluxes %>%
+        mutate(site_code = !!site_code) %>%
         mutate(wy = as.factor(wy),
-               flux_annual_kg_ha = as.numeric(flux),
-               ## method = as.character(method),
+               flux = as.numeric(flux),
+               method = as.character(method),
+               site_code = as.character(site_code))
+    
+    return(fluxes)
+}
+
+read_add_site2 <- function(flux_f){
+    
+    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,8]
+    site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
+    fluxes <- read_feather(flux_f) 
+    if('flux_annual_kg_ha' %in% colnames(fluxes)){
+        fluxes <- fluxes %>%
+            rename(flux = flux_annual_kg_ha)
+    }
+    fluxes <- fluxes %>%
+        mutate(site_code = !!site_code) %>%
+        mutate(wy = as.factor(wy),
+               flux = as.numeric(flux),
+               method = as.character(method),
+
                site_code = as.character(site_code))
     
     return(fluxes)
@@ -49,14 +75,14 @@ daily_fluxes_f <- grep('[.]feather', daily_fluxes_f, value = TRUE)
 daily_fluxes <- map_dfr(daily_fluxes_f, read_add_site) %>%
     mutate(thinning = 'daily')
 
-## Weekely 
+## Weekly 
 weekly_fluxes_f <- list.files('data/fluxes/annual/weekly/nitrate_nitrite_mgl/', 
                               full.names = TRUE,
                               recursive = TRUE)
 
 weekly_fluxes_f <- grep('[.]feather', weekly_fluxes_f, value = TRUE)
 
-weekly_fluxes <- map_dfr(weekly_fluxes_f, read_add_site) %>%
+weekly_fluxes <- map_dfr(weekly_fluxes_f, read_add_site2) %>%
     mutate(thinning = 'weekly')
 
 
@@ -67,7 +93,7 @@ biweekly_fluxes_f <- list.files('data/fluxes/annual/biweekly/nitrate_nitrite_mgl
 
 biweekly_fluxes_f <- grep('[.]feather', biweekly_fluxes_f, value = TRUE)
 
-biweekly_fluxes <- map_dfr(biweekly_fluxes_f, read_add_site) %>%
+biweekly_fluxes <- map_dfr(biweekly_fluxes_f, read_add_site2) %>%
     mutate(thinning = 'biweekly')
 
 ## Monthly
@@ -77,17 +103,30 @@ monthly_fluxes_f <- list.files('data/fluxes/annual/monthly/nitrate_nitrite_mgl/'
 
 monthly_fluxes_f <- grep('[.]feather', monthly_fluxes_f, value = TRUE)
 
-monthly_fluxes <- map_dfr(monthly_fluxes_f, read_add_site) %>%
+monthly_fluxes <- map_dfr(monthly_fluxes_f, read_add_site2) %>%
     mutate(thinning = 'monthly')
 
 ## Combine data
 real_fluxes <- real_fluxes %>%
-    rename(real = flux_annual_kg_ha) %>%
-    select(-method)
+    rename(real = flux) %>%
+    select(-method) %>%
+    filter(real != 0)
 
-comp <- full_join(rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_fluxes), real_fluxes) %>%
-    mutate(dif = real-flux_annual_kg_ha) %>%
-    mutate(percent_dif = (dif/((real+flux_annual_kg_ha)/2))*100)
+comp <- full_join(rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_fluxes), real_fluxes, by = c('wy', 'site_code')) %>%
+    mutate(dif = (real-flux)) %>%
+    mutate(percent_dif = (dif/((real+flux)/2))*100)
+
+
+test <- rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_fluxes) %>%
+    filter(site_code == "01463500")
+
+test2 <-  real_fluxes %>%
+    filter(site_code == "01463500") 
+
+test3 <- comp %>%
+    filter(site_code == "01463500")
+    
+ggplot(test3, aes(x = wy, y = flux, color = method))+geom_point()+
 
 
 comp$thinning <- factor(comp$thinning , levels=c('daily', 'weekly', 'biweekly', 'monthly'))
@@ -209,7 +248,7 @@ monthly_fluxes <- map_dfr(monthly_fluxes_f, read_add_site) %>%
 
 ## Combine data
 real_fluxes <- real_fluxes %>%
-    rename(real = flux_annual_kg_ha) %>%
+    rename(real = flux) %>%
     select(-method)
 
 comp <- full_join(rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_fluxes), real_fluxes) %>%

@@ -4,7 +4,7 @@ estimate_flux_rating_annual <- function(chem_df, q_df, ws_size){
                                q_df = q_data_prep,
                                ws_size = area) %>%
         group_by(wy) %>%
-        summarize(flux_kg_ha = sum(flux_kg_ha)) %>%
+        summarize(flux = sum(flux)) %>%
         mutate(method = 'rating')
     
     return(annual)

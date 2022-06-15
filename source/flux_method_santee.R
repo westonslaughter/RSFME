@@ -45,9 +45,26 @@ estimate_flux_santee <- function(chem_df, q_df, ws_size){
  flux_df <- out_df %>%
     mutate(method = 'santee',
            wy = water_year(date, origin = 'usgs')) %>%
-    select(date, flux_kg_ha, periodStartDate, sampleDate, method, wy) %>%
-    filter(!is.na(flux_kg_ha))
+    select(date, flux = flux_kg_ha, periodStartDate, sampleDate, method, wy) %>%
+    filter(!is.na(flux))
  
-  return(flux_df)
+ #make daily to match q assumptions
+daily_out <- tibble(date = as.numeric(), flux = as.numeric())
+for(i in 1:nrow(flux_df)){
+    startDate <- flux_df$periodStartDate[i]
+    endDate <- flux_df$sampleDate[i]
+    daySeq <- seq(startDate, endDate, by = "days")
+    
+    agg_flux <- flux_df$flux[i]
+    
+    chunk_out <- tibble(date = daySeq, flux = agg_flux/length(daySeq))
+    
+    daily_out <- rbind(daily_out, chunk_out)
+    
+}
+daily_out <- daily_out %>%
+    mutate(method = 'santee', wy = water_year(date, origin = 'usgs'))
+    
+  return(daily_out)
   
 }
