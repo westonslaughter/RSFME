@@ -51,7 +51,6 @@ site_data$long <- as.double(site_data$long)
 site_data <- left_join(site_data, areas)
 write_csv(site_data, 'data/general/site_data.csv')
 
-# get site ecogeographic region
 
 # Variables
 failed_sites <- c()
