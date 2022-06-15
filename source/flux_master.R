@@ -435,7 +435,6 @@ for(i in 1:nrow(loop_frame)){
     }
     
     write_feather(true_flux_annual, glue('data/fluxes/annual/true/{var}/{site_code}.feather'))
-}
     
     for(t in 1:length(thinning_intervals)){
         
@@ -525,12 +524,9 @@ for(i in 1:nrow(loop_frame)){
             write_feather(daily_egret_flux, glue('{directory_raw}/{site_code}.feather'))
             
             # Get annual flux 
-            egret_annual <- egret_flux$Daily %>%
-                mutate(wy = water_year(Date, origin = 'usgs')) %>%
-                filter(wy %in% !!good_years) %>%
+            egret_annual <- daily_egret_flux %>%
                 group_by(wy) %>%
-                summarise(flux_annual_kg_ha = sum(FluxDay, na.rm = TRUE)) %>%
-                mutate(flux = (flux_annual_kg_ha/!!area)) %>%
+                summarize(flux = sum(flux, na.rm = T)) %>%
                 mutate(method = 'wrtds')
             
             write_feather(egret_annual, glue('{directory}/{site_code}.feather'))

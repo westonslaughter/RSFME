@@ -58,4 +58,4 @@ daily_egret_flux <- egret_flux$Daily%>%
            wy = water_year(Date, origin = 'usgs')) %>%
     select(date = Date, flux, method, wy)
 test <- rbind(true_flux_daily, daily_beale_flux, bear_flux_daily, hbef_flux_daily, daily_santee_flux, daily_rating_flux, daily_egret_flux)
-ggplot(filter(test, wy == 2017), aes(x = date, y = flux, color = method)) + geom_point() + scale_y_log10()
+ggplot(test, aes(x = date, y = flux, color = method)) + geom_point() #+ scale_y_log10()
