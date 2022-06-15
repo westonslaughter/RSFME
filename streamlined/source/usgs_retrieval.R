@@ -1,9 +1,18 @@
 # Streamlined USGS data retrieval for sites w continuous Nitrate
+# load sources ####
 library(dataRetrieval)
+library(here)
 library(dplyr)
 library(feather)
 library(zoo)
-
+library(dataRetrieval)
+library(tidyverse)
+library(lubridate)
+library(glue)
+library(feather)
+library(zoo)
+library(lfstat)
+library(RiverLoad)
 # read in df of USGS sites w continous Nitrate
 usgs <- read.csv("streamlined/data/site/usgs_nitrate_sites.csv",
                  colClasses = "character")
@@ -59,17 +68,11 @@ sites <- sites[!sites %in% failed_sites]
 for(i in 1:length(sites)){
     # Download Q data
     site_code <- sites[i]
-    q_data <- readNWISuv(site_code,
+    q_data <- readNWISdv(site_code,
                          parameterCd = '00060')
 
-    # If there is no unit data check for daily values
-    if(nrow(q_data) == 0) {
-        q_data <- readNWISdv(site_code,
-                             parameterCd = '00060')
         date_name <- 'Date'
-    } else{
-        date_name <- 'dateTime'
-    }
+
 
     if(nrow(q_data) == 0) {
         print('no Q found')

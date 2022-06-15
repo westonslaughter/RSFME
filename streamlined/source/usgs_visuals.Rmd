@@ -1,0 +1,25 @@
+
+Read in all computed data
+```{r}
+read_add_site <- function(flux_f){
+    
+    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,9]
+
+    site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
+    fluxes <- read_feather(flux_f) 
+    fluxes <- fluxes %>%
+        mutate(wy = as.factor(wy),
+               flux = as.numeric(flux),
+               method = as.character(method),
+               site_code = as.character(site_code),
+               thin = as.character(thin))
+    
+    return(fluxes)
+}
+
+flux_files <- list.files(here('streamlined/out/'), full.names = TRUE, recursive = T)
+
+fluxes <- map_dfr(flux_files, read_add_site)
+view(fluxes)
+```
+

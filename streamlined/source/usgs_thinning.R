@@ -1,11 +1,6 @@
 #### Thinning Functions for USGS Data ####
 # Load in packages
-library(dataRetrieval)
-library(tidyverse)
-library(lubridate)
-library(glue)
-library(feather)
-library(zoo)
+
 
 # set thinning interval options and variable
 thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')

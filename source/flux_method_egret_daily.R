@@ -219,7 +219,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
             filter(site_code == !!site_code,
                    site_type == 'stream_gauge') %>%
             pull('ws_area_ha') 
-        site_ws_area <- site_ws_area * 100
+        site_ws_area <- site_ws_area / 100
         
         new_point <- sf::st_sfc(sf::st_point(c(site_lon, site_lat)), crs = 4326) %>%
             sf::st_transform(., crs = 4267)
