@@ -3,10 +3,11 @@ library(feather)
 library(glue)
 library(ggthemes)
 
-
+## flux_f <- daily_fluxes_f[1]
 read_add_site <- function(flux_f){
     
     site_code <- str_split_fixed(flux_f, '/', n = Inf)[,7]
+
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     fluxes <- read_feather(flux_f) 
     if('flux_annual_kg_ha' %in% colnames(fluxes)){
@@ -37,6 +38,7 @@ read_add_site2 <- function(flux_f){
         mutate(wy = as.factor(wy),
                flux = as.numeric(flux),
                method = as.character(method),
+
                site_code = as.character(site_code))
     
     return(fluxes)

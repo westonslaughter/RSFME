@@ -9,13 +9,17 @@ library(zoo)
 library(here)
 library(lfstat)
 library(RiverLoad)
-library(lfstat)
 library(imputeTS)
 #devtools::install_github("leppott/ContDataQC")
 library(ContDataQC)
 
-# thinning_intervals <- c('monthly', 'bi_weekely', 'weekely')
-thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')#, 'quarterly')
+
+# source helper functions
+source('source/helper_functions.R')
+
+## thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly')
+thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
+
 vars <- c('nitrate_nitrite_mgl', 'spcond_uscm')
 
 # Read in site data 
@@ -43,10 +47,14 @@ areas <- dataRetrieval::readNWISsite(site_data$site_code) %>%
     select(site_no, drain_area_va, dec_lat_va, dec_long_va) %>%
     mutate(ws_area_ha = drain_area_va*259) %>%
     select(site_code = site_no, ws_area_ha, lat = dec_lat_va, long = dec_long_va)
+
+site_data$ws_area_ha <- as.double(site_data$ws_area_ha)
+site_data$lat <- as.double(site_data$lat)
+site_data$long <- as.double(site_data$long)
+
 site_data <- left_join(site_data, areas)
 write_csv(site_data, 'data/general/site_data.csv')
 
-# get site ecogeographic region
 
 # Variables
 failed_sites <- c()
@@ -95,6 +103,7 @@ for(i in 1:nrow(site_var_data)){
 # Discharge 
 sites <- unique(site_var_data$site_code)
 sites <- sites[!sites %in% failed_sites]
+
 for(i in 1:length(sites)){
     # Download Q data 
     site_code <- sites[i]
@@ -137,16 +146,16 @@ for(i in 1:length(sites)){
 
 # skip to here if rerunning
 # get sites that have both Q and chem 
-# q_sites <- list.files('data/raw/q_cfs/')
-# chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
-# spcond_sites <- list.files('data/raw/spcond_uscm/')
-# common_sites <- q_sites[q_sites %in% chem_sites]
-# common_sites <- common_sites[common_sites %in% spcond_sites]
-# common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1]
+## q_sites <- list.files('data/raw/q_cfs/')
+## chem_sites <- list.files('data/raw/nitrate_nitrite_mgl/')
+## spcond_sites <- list.files('data/raw/spcond_uscm/')
+## common_sites <- q_sites[q_sites %in% chem_sites]
+## common_sites <- common_sites[common_sites %in% spcond_sites]
+## common_sites <- str_split_fixed(common_sites, '\\.', n = Inf)[,1]
 
 # Filter out sites that failed to download for all parameters (Q, nitrate, and spcond)
-# site_var_data <- site_var_data %>%
-#     filter(site_code %in% !!common_sites)
+site_var_data <- site_var_data %>%
+    filter(site_code %in% !!common_sites)
 
 #### Generate site flashiness info ####
 
@@ -197,7 +206,6 @@ for(i in 1:nrow(site_var_data)) {
     
     # Loop through thinning intervals (can add if statements for each of the thinning 
     # intervals)
-    ## p <- 5
     for(p in 1:length(thinning_intervals)){
         
         if(thinning_intervals[p] == 'daily'){
@@ -279,25 +287,28 @@ for(i in 1:nrow(site_var_data)) {
             
         }
 
-        if(thinning_intervals[p] == 'quarterly'){
+        ## if(thinning_intervals[p] == 'quarterly'){
 
-            chem_data_thin <- chem_data %>%
-                filter(hour(datetime) %in% c(13:18)) %>%
-                mutate(quarter = quarters(datetime)) %>%
-                group_by(quarter) %>%
-                top_n(1, datetime) %>%
-                rename(date = datetime)
 
-            directory <- glue('data/thinned/{var}/{t}',
-                              t = thinning_intervals[p])
+        ##     chem_data_thin <- chem_data %>%
+        ##         filter(hour(datetime) %in% c(13:18)) %>%
+      ##         mutate(date = date(datetime),
+      ##                  quarter = dt_to_wy_quarter(date),
+        ##                year = year(datetime)
+        ##              ) %>%
+        ##         group_by(quarter, year) %>%
+        ##         top_n(1, datetime)
 
-            if(!dir.exists(directory)){
-                dir.create(directory, recursive = TRUE)
-            }
+        ##     directory <- glue('data/thinned/{var}/{t}',
+        ##                       t = thinning_intervals[p])
 
-            write_feather(chem_data_thin, glue('{directory}/{site}.feather'))
+        ##     if(!dir.exists(directory)){
+        ##         dir.create(directory, recursive = TRUE)
+        ##     }
 
-        }
+        ##     write_feather(chem_data_thin, glue('{directory}/{site}.feather'))
+
+        ## }
     }
 }
 
@@ -334,10 +345,12 @@ source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
 
+
 for(i in 1:nrow(loop_frame)){
     
     site_code <- loop_frame[i,1]
     parm_cd <- loop_frame[i,3]
+  
     var <- variable_data %>%
         filter(usgs_parm_cd == !!parm_cd) %>%
         pull(var)
@@ -435,7 +448,8 @@ for(i in 1:nrow(loop_frame)){
     }
     
     write_feather(true_flux_annual, glue('data/fluxes/annual/true/{var}/{site_code}.feather'))
-    
+
+    ## t <- 1
     for(t in 1:length(thinning_intervals)){
         
         thinning_interval <- thinning_intervals[t]

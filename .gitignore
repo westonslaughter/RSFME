@@ -4,5 +4,6 @@
 .Ruserdata
 riverine_solute_flux_methods_evaluation.Rproj
 /data/*
+/streamlined/data/*
 !/data/general
 plots/
