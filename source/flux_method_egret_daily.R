@@ -39,7 +39,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
         return(fin_dates)
         
     }
-    
+
+
     ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE, 
              run_egret = TRUE, kalman = FALSE, quiet = FALSE,
              site_data = NULL){

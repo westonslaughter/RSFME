@@ -324,9 +324,9 @@ source('source/flux_method_beale_annual.R')
 source('source/flux_method_rating_daily.R')
 source('source/flux_method_rating_annual.R')
 
-## i <- 108
 for(i in 10:nrow(site_var_data)){
-    
+## for(i in 10:20){
+    ## i <- 10
     site_code <- site_var_data[i,1]
     parm_cd <- site_var_data[i,3]
     var <- variable_data %>%
@@ -418,7 +418,8 @@ for(i in 10:nrow(site_var_data)){
     }
     
     write_feather(true_flux_annual, glue('data/fluxes/annual/true/{var}/{site_code}.feather'))
-    
+
+    ## t <- 1
     for(t in 1:length(thinning_intervals)){
         
         thinning_interval <- thinning_intervals[t]

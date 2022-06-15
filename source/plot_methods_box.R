@@ -3,16 +3,16 @@ library(feather)
 library(glue)
 library(ggthemes)
 
-
+## flux_f <- daily_fluxes_f[1]
 read_add_site <- function(flux_f){
     
-    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,8]
+    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,7]
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     fluxes <- read_feather(flux_f) %>%
-        mutate(site_code = !!site_code) %>%
+      mutate(site_code = !!site_code) %>%
         mutate(wy = as.factor(wy),
-               flux_annual_kg_ha = as.numeric(flux_annual_kg_ha),
-               method = as.character(method),
+               flux_annual_kg_ha = as.numeric(flux),
+               ## method = as.character(method),
                site_code = as.character(site_code))
     
     return(fluxes)
@@ -24,7 +24,7 @@ real_fluxes_f <- list.files('data/fluxes/annual/true/nitrate_nitrite_mgl', full.
 
 real_fluxes <- tibble()
 for(i in 1:length(real_fluxes_f)){
-    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,7]
+    site_code <- str_split_fixed(real_fluxes_f[i], '/', n = Inf)[,6]
     site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
     real_fluxes_this <- read_feather(real_fluxes_f[i]) %>%
         mutate(site_code = !!site_code)
