@@ -58,6 +58,7 @@ for(i in 1:nrow(usgs)){
                       s = site_code)
 
     write_feather(var_data, file_path)
+    print(paste(site_code, 'done'))
 
 }
 

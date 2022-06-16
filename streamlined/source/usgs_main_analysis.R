@@ -21,15 +21,68 @@ source('source/helper_functions.R')
 # read in USGS sites w continuous Nitrate ####
 usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv")
 
-good_sites <- c(1,3,8,9,12,13,14,17,18)
-for(i in good_sites){
+# find good sites #####
+# Q and N present
+# 85% data coverage by day
+good_list <- tibble(site_code = as.character(), 
+                    index = as.integer())
+for(i in 1:nrow(usgs_n)){ #check for good sites
+    #for(i in 1:length(good_sites)){
+    # select site #####
+    ### prep data ####
+    #### read in raw ######
+    site_no <- usgs_n$site_code[i]
+    area <- usgs_n$ws_area_ha[i]
+    lat <- usgs_n$lat[i]
+    long <- usgs_n$long[i]
+    
+    raw_data_n <- read_feather(glue('streamlined/data/raw/nitrate_nitrite_mgl/', site_no, '.feather'))
+    raw_data_q <- read_feather(glue('streamlined/data/raw/q_cfs/', site_no, '.feather')) %>%
+        group_by(datetime = date(datetime)) %>%
+        summarize(val = mean(val)) %>%
+        mutate(var = 'q_cfs',
+               site_code = site_no) %>%
+        select(site_code, datetime, var, val)
+    
+    #### isolate to full years######
+    
+    q_check <- raw_data_q %>%
+        mutate(date = date(datetime)) %>%
+        distinct(., date, .keep_all = TRUE) %>%
+        mutate(water_year = water_year(datetime, origin = "usgs")) %>%
+        group_by(water_year) %>%
+        summarise(n = n()) %>%
+        filter(n >= 311)
+    
+    conc_check <- raw_data_n %>%
+        mutate(date = date(datetime)) %>%
+        distinct(., date, .keep_all = TRUE) %>%
+        mutate(water_year = water_year(date, origin = "usgs")) %>%
+        group_by(water_year) %>%
+        summarise(n = n()) %>%
+        filter(n >= 311)
+    
+    q_good_years <- q_check$water_year
+    conc_good_years <- conc_check$water_year
+    
+    good_years <- q_good_years[q_good_years %in% conc_good_years]
+    if(length(good_years) != 0){
+        
+        append <- tibble(site_code = site_code, index = i)
+        good_list <- rbind(good_list, append)
+        
+    }else{print('fail')}
+}
+
+for(i in 1:nrow(good_list)){
 # select site #####
 ### prep data ####
 #### read in raw ######
-site_no <- usgs_n$site_code[i]
-area <- usgs_n$ws_area_ha[i]
-lat <- usgs_n$lat[i]
-long <- usgs_n$long[i]
+index <- good_list$index[i]
+site_no <- usgs_n$site_code[index]
+area <- usgs_n$ws_area_ha[index]
+lat <- usgs_n$lat[index]
+long <- usgs_n$long[index]
 
 raw_data_n <- read_feather(glue('streamlined/data/raw/nitrate_nitrite_mgl/', site_no, '.feather'))
 raw_data_q <- read_feather(glue('streamlined/data/raw/q_cfs/', site_no, '.feather')) %>%
@@ -61,10 +114,6 @@ q_good_years <- q_check$water_year
 conc_good_years <- conc_check$water_year
 
 good_years <- q_good_years[q_good_years %in% conc_good_years]
-# if(length(good_years) != 0){
-#     print(i)
-# }else{print('fail')}
-
 
 #### join data and cut to good years ######
 # at this site, q is daily and nitrate is high frequency, so averaging n to daily
@@ -75,7 +124,7 @@ daily_data_n <- raw_data_n %>%
     mutate(site_code = site_no, var = 'nitrate_nitrite_mgl') %>%
     select(site_code, datetime = date, var, val)
 
-raw_data_full <- rbind(daily_data_n, raw_data_q) %>%
+raw_data_full_pre <- rbind(daily_data_n, raw_data_q) %>%
     pivot_wider(names_from = var, values_from = val, id_cols = c(site_code, datetime)) %>%
     mutate(wy = water_year(datetime, origin = 'usgs'),
            q_lps = q_cfs*28.316847) %>%
@@ -85,9 +134,9 @@ raw_data_full <- rbind(daily_data_n, raw_data_q) %>%
 
 # Loop through good years ####
 # needs DAILY q and any chem
-for(t in length(good_years)){
+for(t in 1:length(good_years)){
 target_year <- as.numeric(as.character(good_years[t]))
-raw_data_full <- raw_data_full %>%
+raw_data_full <- raw_data_full_pre %>%
     mutate(wy = as.numeric(as.character(wy))) %>%
     filter(wy == target_year)
 ### TRUTH (via composite) ######
@@ -105,7 +154,7 @@ model_data <- tibble(c_log, q_log) %>%
            is.finite(q_log))%>%
     na.omit()
 
-rating <- summary(lm(model_data$c_log ~ model_data$q_log))
+rating <- summary(lm(model_data$c_log ~ model_data$q_log, singular.ok = T))
 
 # extract model info
 intercept <- rating$coefficients[1]
@@ -120,6 +169,7 @@ rating_filled_df <- raw_data_full %>%
     mutate(res = con_reg-con,
            res = imputeTS::na_interpolation(res),
            con_com = con_reg-res)
+rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
 
 # calculate true annual flux
 true_flux <- rating_filled_df %>%
@@ -134,7 +184,7 @@ true_flux <- rating_filled_df %>%
 prep_data_q <- raw_data_q %>%
     mutate(wy = water_year(datetime, origin = 'usgs'),
            q_lps = val*28.316847) %>%
-    filter(wy %in% good_years) %>%
+    filter(wy == target_year) %>%
     select(site_code, date = datetime, q_lps, wy)
 
 
@@ -146,7 +196,7 @@ thinned_daily_c <- raw_data_n %>%
     distinct(date, .keep_all = T) %>%
     select(-datetime, -var) %>%
     rename(con = val) %>%
-    filter(wy %in% good_years)
+    filter(wy == target_year)
 
 thinned_weekly_c <- raw_data_n %>%
     mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -156,7 +206,8 @@ thinned_weekly_c <- raw_data_n %>%
     mutate(date = lubridate::date(datetime)) %>%
     distinct(date, .keep_all = T) %>%
     select(-datetime, -var) %>%
-    rename(con = val)
+    rename(con = val)%>%
+    filter(wy == target_year)
 
 thinned_biweekly_c <- raw_data_n %>%
     mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -166,7 +217,8 @@ thinned_biweekly_c <- raw_data_n %>%
     mutate(date = lubridate::date(datetime)) %>%
     distinct(date, .keep_all = T) %>%
     select(-datetime, -var) %>%
-    rename(con = val)
+    rename(con = val)%>%
+    filter(wy == target_year)
 
 thinned_monthly_c <- raw_data_n %>%
     mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -176,7 +228,8 @@ thinned_monthly_c <- raw_data_n %>%
     filter(day(date) == 1) %>%
     distinct(date, .keep_all = T) %>%
     select(-datetime, -var) %>%
-    rename(con = val)
+    rename(con = val)%>%
+    filter(wy == target_year)
 
 nmonth <- nrow(thinned_monthly_c)
 
@@ -264,7 +317,7 @@ model_data <- tibble(c_log, q_log) %>%
            is.finite(q_log))%>%
     na.omit()
 
-rating <- summary(lm(model_data$c_log ~ model_data$q_log))
+rating <- summary(lm(model_data$c_log ~ model_data$q_log, singular.ok = T))
 
 # extract model info
 intercept <- rating$coefficients[1]
@@ -281,7 +334,7 @@ rating_filled_df <- q_df %>%
            con_com = con_reg-res,
            site_code = site_no,
            wy = water_year(date, origin = 'usgs'))
-
+rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
 return(rating_filled_df)
 }
 
@@ -418,7 +471,7 @@ quarterly_out <- tibble(wy = flux_from_quarterly_comp$wy[1],
 ## congeal results ####
 out_frame <- rbind(true_flux, daily_out, weekly_out, biweekly_out, monthly_out, quarterly_out)
 
-## save out of loop ####
+## save flux out of loop ####
 directory <- glue('streamlined/out/{wy}',
                   wy = target_year)
 if(!dir.exists(directory)){
@@ -428,5 +481,28 @@ file_path <- glue('{directory}/{s}.feather',
                   s = site_no)
 
 write_feather(out_frame, file_path)
-    }
+## take meta and save out of loop ####
+meta_n <- raw_data_n %>%
+    filter(wy == target_year)
+
+out_meta <- tibble(max_q_lps = max(prep_data_q$q_lps, na.rm = T),
+                   min_q_lps = min(prep_data_q$q_lps, na.rm = T),
+                   mean_q_lps = mean(prep_data_q$q_lps, na.rm = T),
+                   sd_q_lps = sd(prep_data_q$q_lps, na.rm = T),
+                   max_n = max(meta_n$val, na.rm = T),
+                   min_n = min(meta_n$val, na.rm = T),
+                   mean_n = mean(meta_n$val, na.rm = T),
+                   sd_n = sd(meta_n$val, na.rm = T))
+
+
+directory <- glue('streamlined/data/meta/{wy}',
+                  wy = target_year)
+if(!dir.exists(directory)){
+    dir.create(directory, recursive = TRUE)
 }
+file_path <- glue('{directory}/{s}.feather',
+                  s = site_no)
+
+write_feather(out_meta, file_path)
+    } # end year loop
+} # end site loop

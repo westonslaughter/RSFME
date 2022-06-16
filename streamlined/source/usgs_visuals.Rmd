@@ -1,5 +1,23 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+library(tidyverse)
+library(feather)
+library(glue)
+library(ggthemes)
+library(png)
+library(here)
+library(mapview)
+library(sf)
+library(viridis)
+library(kableExtra)
+library(RColorBrewer)
+```
 
-Read in all computed data
+#Read in all computed data
 ```{r}
 read_add_site <- function(flux_f){
     
@@ -19,7 +37,165 @@ read_add_site <- function(flux_f){
 
 flux_files <- list.files(here('streamlined/out/'), full.names = TRUE, recursive = T)
 
-fluxes <- map_dfr(flux_files, read_add_site)
-view(fluxes)
+fluxes <- map_dfr(flux_files, read_add_site) %>%
+    na.omit() #only take complete years
+#view(fluxes)
 ```
 
+
+#calculate percent difference from 'truth' 
+```{r}
+truth <- filter(fluxes, method == 'true') %>%
+    rename(real = flux) %>%
+    select(wy, site_code, real)
+
+coarse <- filter(fluxes, method != 'true')
+
+comp <- left_join(coarse, truth, by = c('wy','site_code')) %>%
+    mutate(dif = (real-flux)) %>%
+    mutate(percent_dif = (dif/((real+flux)/2))*100) %>%
+    na.omit() # if sites are incomplete when read in this gets rid of them
+
+```
+
+#Get metadata and join it in
+```{r}
+comp_meta <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv") %>%
+    right_join(., comp, by = "site_code")%>%
+    select(-`...1`, -dataset) %>%
+    filter(ws_area_ha < 100000) #filter out big ws
+
+n_site_years <- comp_meta %>%
+    select(site_code, wy) %>%
+    unique() %>%
+    nrow()
+```
+
+#Map sites!
+```{r}
+pal <-  colorRampPalette(brewer.pal(6, "YlOrRd"))
+#mapviewOptions(basemaps = 'ESRI.WorldImagery')
+comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily') %>%
+    select(-thin, -method) %>%
+    st_as_sf(coords = c('long', 'lat'),
+             crs = 4326) %>%
+    mapview(zcol = 'RBI',
+            col.regions = pal, 
+            at = c(0, 0.25, .5, .75, 1, 1.25),
+            layer.name = 'RBI',
+            alpha = 'RBI'
+            )
+
+   
+```
+
+#What ecoregions are represented?
+```{r}
+length(unique(comp_meta$NA_L2NAME))
+ecoregion_table <- comp_meta %>%
+    select(wy, site_code, NA_L2NAME,
+           RBI, ws_area_ha) %>%
+    unique() %>%
+    group_by(NA_L2NAME) %>%
+    tally() %>%
+    arrange(-n) %>%
+    rename(Ecoregion = NA_L2NAME,
+           `Site Years` = n) %>%
+    kbl() %>%
+    kable_paper(full_width = F)
+```
+
+# Site year by site
+```{r}
+site_year_hist <- comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily') %>%
+    select(wy, site_code) %>%
+    group_by(site_code) %>%
+    tally() %>%
+    ggplot(., aes(x = n))+
+        geom_histogram(binwidth = 1, color = 'black')+
+    scale_x_continuous(breaks = c (2, 4, 6, 8))+
+    scale_y_continuous(breaks = c (2, 4, 6, 8, 10))+
+    theme_few()+
+    labs(x = 'Site Years by Site',
+         y = 'Count',
+         title = 'Distribution of Site Years')
+site_year_hist
+ggsave(site_year_hist, filename = 'streamlined/plots/site_year_hist.png')
+```
+
+#Make a nice boxplot by thinning interval and method
+```{r}
+#
+comp_meta$thin <- factor(comp_meta$thin, levels=c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly'))
+comp_meta$method <- factor(comp_meta$method, levels = c('pw', 'beale', 'rating', 'composite'))
+
+#
+method_labs <- c('Period-Weighted', 'Beale Ratio', 'Regression', 'Composite')
+names(method_labs) <-  c('pw', 'beale', 'rating', 'composite')
+
+#
+n_all <- ggplot(comp_meta, aes(x = thin, y = percent_dif)) + 
+    geom_rect(color = '#FFD685',
+              fill = '#FFD685',
+              alpha = .1,
+              aes(ymax = 20, ymin = 10, 
+                  xmin = -Inf, xmax = Inf))+
+    geom_rect(color = '#7AAC5D',
+              fill = '#7AAC5D',
+              alpha = .1,
+              aes(ymax = 10, ymin = -10, 
+                  xmin = -Inf, xmax = Inf))+
+    geom_rect(color = '#FFD685',
+              fill = '#FFD685',
+              alpha = .1,
+              aes(ymax = -10, ymin = -20, 
+                  xmin = -Inf, xmax = Inf))+
+    facet_wrap(~method, 
+               ncol  = 2,
+               labeller = labeller(method = method_labs)) +
+     geom_boxplot(alpha=.5) +
+    theme_few() +
+    theme(axis.text = element_text(size = 15),
+          axis.title = element_text(size = 20),
+          strip.text.x = element_text(size = 20),
+          plot.caption = element_text(size = 15))+
+    labs(x = 'Thinning Interval', 
+         y = '% Difffernce from True Nitrate Flux',
+         caption = paste0(n_site_years, ' total site years'))
+n_all
+ggsave(plot = n_all, filename = 'streamlined/plots/overview_boxplot.png', height = 6, width = 10)
+```
+
+#Make a nice plot of how watershed area tracks with percent difference across quarterly data
+```{r}
+ggplot(filter(comp_meta, thin == 'quarterly'), 
+       aes(x = ws_area_ha/100, y = percent_dif))+
+    geom_point()+
+    scale_x_log10()+
+    facet_wrap(~method,
+               labeller = labeller(method = method_labs))+
+    theme_few()+
+    labs(x = 'Watershed Area (square km, log)', 
+         y = '% Difffernce from True Nitrate Flux',
+         caption = paste0(n_site_years, ' total site years'))
+```
+
+#Make a nice plot of how RBI tracks with percent difference across biweekly data
+```{r}
+#cor(comp_meta$ws_area_ha, comp_meta$RBI)
+#cor(comp_meta$RBI, comp_meta$percent_dif)
+ggplot(filter(comp_meta, thin == 'quarterly'), 
+       aes(x = RBI, y = abs(percent_dif)))+
+    geom_point()+
+    scale_x_log10()+
+    facet_wrap(~method,
+               labeller = labeller(method = method_labs))+
+    theme_few()+
+    labs(x = 'Flashiness (RBI)', 
+         y = '% Difffernce from True Flux (absolute)',
+         caption = paste0(n_site_years, ' total site years'))
+```
