@@ -22,6 +22,7 @@ source('source/helper_functions.R')
 usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv")
 
 good_sites <- c(1,3,8,9,12,13,14,17,18)
+
 for(i in good_sites){
 # select site #####
 ### prep data ####

@@ -14,10 +14,7 @@ library(imputeTS)
 # source helper functions
 source('source/helper_functions.R')
 
-# set thinning interval options and variable
-thinning_intervals <- c('daily', 'weekly', 'biweekly', 'monthly')
-var <- 'nitrate_nitrite_mgl'
-
+# Thinning Functions
 # Daily Thinning
 usgs_thin_daily <- function(chem_data) {
     chem_data_thin <- chem_data %>%
@@ -98,4 +95,33 @@ usgs_thin_monthly <- function(chem_data) {
     }
 
     write_feather(chem_data_thin, glue('{directory}/{site}.feather'))
+}
+
+
+# watershed attribute functions
+get_site_ecoregions <- function(site_data, eco_fp, good_sites = NULL, level = "NA_L2NAME") {
+
+    if(typeof(site_data) == 'character') {
+      ws <- read.csv(site_fp, colClasses = "character") %>%
+          sf::st_as_sf(., coords = c('long', 'lat'), crs = 4326) %>%
+          st_make_valid()
+    } else {
+      ws <- site_data %>%
+          sf::st_as_sf(., coords = c('long', 'lat'), crs = 4326) %>%
+          st_make_valid()
+    }
+
+    if(!is.null(good_sites)) {
+      ws <- ws %>%
+          filter(site_code %in% !!good_sites)
+    }
+
+    epa_eco_ii <- read_sf(eco_fp) %>%
+      select(!!level, geometry) %>%
+      st_transform(crs = 4326) %>%
+      st_make_valid()
+
+    site_eco <- st_intersection(ws, epa_eco_ii)
+
+    return(site_eco)
 }
