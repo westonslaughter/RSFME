@@ -15,6 +15,7 @@ library(sf)
 library(viridis)
 library(kableExtra)
 library(RColorBrewer)
+
 ```
 
 #Read in all computed data
@@ -71,22 +72,73 @@ n_site_years <- comp_meta %>%
     nrow()
 ```
 
-#Map sites!
+#Map sites! Mapview not working for no reason.
 ```{r}
-pal <-  colorRampPalette(brewer.pal(6, "YlOrRd"))
-#mapviewOptions(basemaps = 'ESRI.WorldImagery')
-comp_meta %>%
+us_base <- map_data('state')
+
+map_points <- comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily') %>%
+    group_by(site_code) %>%
+    slice(1) %>%
+    select(-thin, -method) %>%
+    mutate(alpha = RBI^2)
+
+n_sites <- nrow(map_points)
+
+site_map <- ggplot()+
+    geom_polygon(data = us_base, aes(x=long, y=lat, group = group),
+                 color = 'black', fill = 'white')+
+    geom_point(data = map_points, aes(x = long, y = lat, fill = RBI),
+               size = 4, color = 'black', pch = 21)+
+    labs(caption = paste0(n_sites, ' total sites'))+
+    theme_few()+
+    theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        plot.background = element_rect(fill = "black"),
+        panel.background = element_rect(fill = "black",
+                                colour = "black",
+                                size = 0.5, linetype = "solid"))+
+    #scale_fill_binned(type = 'viridis', breaks = c(0, .1, .5, .8, 1))
+    scale_fill_steps2(low = "yellow", mid = "orange", high = "red", midpoint = .02)
+    #scale_fill_viridis(option = 'magma',
+                        #direction = -1) 
+
+ggsave(site_map, filename = 'streamlined/plots/site_map.png', width = 6, height = 3)
+
+
+pal <-  colorRampPalette(brewer.pal(5, "Reds"))
+#pal <- colorRampPalette(c("yellow", 'orange', "red"),
+#                                space = "rgb")
+#mapviewOptions(basemaps = 'Thunderforest.TrasnportDark')
+mapviewOptions(basemaps = 'ESRI.WorldImagery')
+
+map <- comp_meta %>%
     filter(method == 'pw',
            thin == 'daily') %>%
     select(-thin, -method) %>%
+    mutate(alpha = RBI^2) %>%
     st_as_sf(coords = c('long', 'lat'),
              crs = 4326) %>%
+    #st_jitter(factor = 0.05) %>%
     mapview(zcol = 'RBI',
             col.regions = pal, 
-            at = c(0, 0.25, .5, .75, 1, 1.25),
+            at = c(0, 0.25, .5, .75, 1),
             layer.name = 'RBI',
-            alpha = 'RBI'
-            )
+            alpha = 'alpha',
+            map.types = mapviewGetOption("basemaps"))
+map
+
+mapview::mapshot(
+  map,
+  url = NULL,
+  file = 'streamlined/plots/map.png',
+  remove_controls = c("zoomControl", "layersControl", "homeButton", "scaleBar",
+    "drawToolbar", "easyButton"))
 
    
 ```
@@ -199,3 +251,9 @@ ggplot(filter(comp_meta, thin == 'quarterly'),
          y = '% Difffernce from True Flux (absolute)',
          caption = paste0(n_site_years, ' total site years'))
 ```
+
+# Make bespoke coarsening illustration. Note that this plot will only work with by loading 'coarse_illustration.RData' first.
+```{r}
+
+```
+

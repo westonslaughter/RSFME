@@ -19,7 +19,10 @@ source('streamlined/source/usgs_helpers.R')
 source('source/helper_functions.R')
 
 # read in USGS sites w continuous Nitrate ####
-usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv")
+usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv") %>%
+    filter(site_code != '03275500',
+           site_code != '03381495',
+           site_code != '01646500')
 
 # find good sites #####
 # Q and N present
@@ -68,7 +71,7 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
     good_years <- q_good_years[q_good_years %in% conc_good_years]
     if(length(good_years) != 0){
         
-        append <- tibble(site_code = site_code, index = i)
+        append <- tibble(site_code = site_no, index = i)
         good_list <- rbind(good_list, append)
         
     }else{print('fail')}
