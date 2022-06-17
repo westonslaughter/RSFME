@@ -16,7 +16,7 @@ source('source/helper_functions.R')
 
 # Thinning Functions
 # Daily Thinning
-usgs_thin_daily <- function(chem_data) {
+usgs_thin_daily <- function(chem_data, site, var) {
     chem_data_thin <- chem_data %>%
       filter(hour(datetime) %in% c(13:18)) %>%
       mutate(date = lubridate::date(datetime)) %>%

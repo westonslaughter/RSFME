@@ -79,7 +79,7 @@ for(s in ms_sites_ls) {
            date = date(datetime)) %>%
     group_by(site_code, water_year, date) %>%
     summarise(nitrate_n_mgl = mean(GN_NO3_N),
-              q_lps = IS_discharge) %>%
+              q_lps = mean(IS_discharge)) %>%
     select(site_code, water_year, date, nitrate_n_mgl, q_lps)
 
   # loop thru water years
@@ -131,8 +131,50 @@ for(s in ms_sites_ls) {
             mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
             group_by(water_year) %>%
             summarize(flux = sum(flux)) %>%
-        mutate(method = 'true',
-               thin = 'none')
+            mutate(method = 'true',
+                   thin = 'none')
+
+        ### THIN data to selected intervals #######
+        ms_raw <- merge(ms_q, ms_chem, by = c('datetime', 'site_code'), .keep_all = TRUE) %>%
+          mutate(nitrate_n_mgl = GN_NO3_N,
+                 q_lps = IS_discharge,
+                 wy = water_year(datetime, origin = "usgs")) %>%
+          select(site_code, wy, datetime, nitrate_n_mgl, q_lps)
+
+       # MacroSheds is already thinned to daily
+        thinned_weekly_c <- ms_raw %>%
+          filter(wy == y) %>%
+          filter(!is.na(nitrate_n_mgl)) %>%
+          filter(lubridate::wday(datetime) == 3) %>%
+            mutate(date = lubridate::date(datetime)) %>%
+            distinct(date, .keep_all = T) %>%
+            select(-datetime) %>%
+            rename(con = nitrate_n_mgl)
+
+        thinned_biweekly_c <- ms_raw %>%
+          filter(wy == y) %>%
+          filter(!is.na(nitrate_n_mgl)) %>%
+          filter(lubridate::mday(datetime) %in% c(1, 15)) %>%
+          mutate(date = lubridate::date(datetime)) %>%
+          distinct(date, .keep_all = T) %>%
+          select(-datetime) %>%
+          rename(con = nitrate_n_mgl)
+
+        thinned_monthly_c <- ms_raw %>%
+          filter(wy == y) %>%
+          filter(!is.na(nitrate_n_mgl)) %>%
+            mutate(date = date(datetime)) %>%
+            filter(day(date) == 1) %>%
+            distinct(date, .keep_all = T) %>%
+            select(-datetime) %>%
+            rename(con = nitrate_n_mgl)
+
+        nmonth <- nrow(thinned_monthly_c)
+
+        thinned_quarterly_c <- rbind(thinned_monthly_c[1,],
+                             thinned_monthly_c[as.integer(.5*nmonth),],
+                             thinned_monthly_c[as.integer(.75*nmonth),],
+                             thinned_monthly_c[nmonth,])
 
     }
 
