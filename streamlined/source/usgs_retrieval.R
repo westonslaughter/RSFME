@@ -15,7 +15,9 @@ library(lfstat)
 library(RiverLoad)
 # read in df of USGS sites w continous Nitrate
 usgs <- read.csv("streamlined/data/site/usgs_nitrate_sites.csv",
-                 colClasses = "character")
+                 colClasses = "character") %>%
+    filter(!site_code %in% done_sites_0615) # this is here so i'm not downloading things i already have it will not work from the top
+
 
 # Parameter
 # Nitrate
@@ -58,6 +60,7 @@ for(i in 1:nrow(usgs)){
                       s = site_code)
 
     write_feather(var_data, file_path)
+    print(paste(site_code, 'done'))
 
 }
 

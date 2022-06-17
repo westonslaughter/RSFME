@@ -117,18 +117,6 @@ comp <- full_join(rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_flu
     mutate(percent_dif = (dif/((real+flux)/2))*100)
 
 
-test <- rbind(daily_fluxes, weekly_fluxes, biweekly_fluxes,monthly_fluxes) %>%
-    filter(site_code == "01463500")
-
-test2 <-  real_fluxes %>%
-    filter(site_code == "01463500") 
-
-test3 <- comp %>%
-    filter(site_code == "01463500")
-    
-ggplot(test3, aes(x = wy, y = flux, color = method))+geom_point()+
-
-
 comp$thinning <- factor(comp$thinning , levels=c('daily', 'weekly', 'biweekly', 'monthly'))
 
 n_all <- ggplot(comp, aes(x = thinning, y = percent_dif)) + 
