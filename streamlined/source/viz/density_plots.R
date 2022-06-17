@@ -2,6 +2,7 @@
 library(macrosheds)
 library(ggplot2)
 library(ggthemes)
+library(wesanderson)
 
 source("streamlined/source/usgs_helpers.R")
 
@@ -82,19 +83,72 @@ sites$ws_area_ha <- as.numeric(sites$ws_area_ha)
 sites$rbi <- as.numeric(sites$rbi)
 
 # Plots
+names(wes_palettes)
+
+# n
+ms.n <- nrow(sites[sites$dataset == 'macrosheds',])
+usgs.n <- nrow(sites[sites$dataset == 'USGS',])
+
 # Watershed Area
-ha <- ggplot(sites, aes(x=log(ws_area_ha), color = dataset)) +
-  geom_density() +
+gg_wa <- ggplot(sites, aes(x=log(ws_area_ha), color = dataset)) +
+  geom_density(aes(fill= dataset), alpha=0.7) +
+  ggtitle("\nDistribution of Watershed Areas in MacroSheds and USGS",
+          subtitle = "across sites used in flux analysis\n\n"
+          ) +
+  scale_fill_manual(values = wes_palette("Royal1", n = 2)) +
+  scale_color_manual(values = wes_palette("Royal1", n = 2)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  xlab("\nLog of Watershed Area (ha)\n") +
+  ylab("\nDensity\n") +
   theme_few() +
-  theme(text = element_text(size=26)) +
-  ggtitle("Density by Log Watershed Area in MacroSheds and USGS Sites Used in Flux Analysis")
+  theme(text = element_text(size=28),
+        axis.line = element_line(colour = "black"),
+        plot.subtitle = element_text(face = "italic"),
+        panel.border = element_blank(),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        ## legend.key.height = unit(1, 'cm'), #change legend key height
+        ## legend.key.width = unit(1, 'cm'), #change legend key width
+        ## legend.position = 'bottom',
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=24),
+        legend.spacing.y = unit(1.0, 'cm')
+        ) +
+  annotate("text", x=4, y=0.08, size = 11,
+           label= paste0("n = ", ms.n)) +
+  annotate("text", x=10, y=0.08, size = 11,
+           label= paste0("n = ", usgs.n))
 
 # Flashiness (RBI)
-rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
-  geom_density() +
+gg_rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
+  geom_density(aes(fill= dataset), alpha=0.7) +
+  ggtitle("\nDistribution of Hydrologic Flashiness (RBI) in MacroSheds and USGS",
+          subtitle = "across sites used in flux analysis\n\n"
+          ) +
+  scale_fill_manual(values = wes_palette("Royal1", n = 2)) +
+  scale_color_manual(values = wes_palette("Royal1", n = 2)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  xlab(expression("\nRichards-Baker (Flashiness) Index (RBI)"^1*"\n")) +
+  ylab("\nDensity\n") +
   theme_few() +
-  theme(text = element_text(size=26)) +
-  ggtitle("Density by RBI Flashiness Index in MacroSheds and USGS Sites Used in Flux Analysis")
+  theme(text = element_text(size=28),
+        axis.line = element_line(colour = "black"),
+        plot.subtitle = element_text(face = "italic"),
+        panel.border = element_blank(),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        ## legend.key.height = unit(1, 'cm'), #change legend key height
+        ## legend.key.width = unit(1, 'cm'), #change legend key width
+        ## legend.position = 'bottom',
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=24),
+        legend.spacing.y = unit(1.0, 'cm')
+        ) +
+  annotate("text", x=0.5, y=1.2, size = 11,
+           label= paste0("n = ", ms.n)) +
+  annotate("text", x=0.13, y=1.2, size = 11,
+           label= paste0("n = ", usgs.n)) +
+  labs(caption = expression(""^1*"Baker et al. 2004"))
 
 # EcoRegions
 ggplot(sites, aes(x = `rbi`, y = `ecoregion`, fill = ..x..)) +
@@ -105,8 +159,11 @@ ggplot(sites, aes(x = `rbi`, y = `ecoregion`, fill = ..x..)) +
     theme(
       legend.position="none",
       panel.spacing = unit(0.1, "lines"),
-      strip.text.x = element_text(size = 8)
+      strip.text.x = element_text(size = 12)
     )
+
+
+
 ggplot(sites, aes(x = `ws_area_ha`, y = `ecoregion`, fill = ..x..)) +
   geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01) +
   scale_fill_viridis(name = "ws_area_ha", option = "C") +
