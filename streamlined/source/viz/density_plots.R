@@ -1,5 +1,6 @@
 # script plotting USGS and MacroSHeds density by attributes
 library(macrosheds)
+library(sf)
 library(ggplot2)
 library(ggthemes)
 library(wesanderson)
@@ -47,6 +48,8 @@ ms_sites <- ms_sites %>%
 
 # get Q for RBI calc
 ms_sites_ls <- unique(ms_sites$site_code)
+my_ms_dir <- "streamlined//data//ms"
+
 my_q <- ms_load_product(
     my_ms_dir,
     prodname = "discharge",
@@ -66,6 +69,7 @@ rbi_q <- my_q %>%
 
 ms.df <- ms %>%
   inner_join(rbi_q)
+
 
 ms.df <- get_site_ecoregions(site_data = ms.df,
                     eco_fp = "data/spatial/eco/NA_CEC_Eco_Level2.shp")
@@ -111,7 +115,7 @@ ms.n <- nrow(sites[sites$dataset == 'MacroSheds',])
 usgs.n <- nrow(sites[sites$dataset == 'USGS',])
 
 # Watershed Area
-gg_wa <- ggplot(sites, aes(x=log(ws_area_ha), color = dataset)) +
+gg_wa <- ggplot(sites, aes(x=log10(ws_area_ha), color = dataset)) +
   geom_density(aes(fill= dataset), alpha=0.7) +
   ggtitle("\nDistribution of Watershed Areas in MacroSheds and USGS",
           subtitle = "across sites used in flux analysis\n\n"
@@ -135,13 +139,13 @@ gg_wa <- ggplot(sites, aes(x=log(ws_area_ha), color = dataset)) +
         legend.text = element_text(size=24),
         legend.spacing.y = unit(2.0, 'cm')
         ) +
-  annotate("text", x=4, y=0.08, size = 11,
+  annotate("text", x=1.8, y=.2, size = 11,
            label= paste0("n = ", ms.n)) +
-  annotate("text", x=10, y=0.08, size = 11,
+  annotate("text", x=4.1, y=.2, size = 11,
            label= paste0("n = ", usgs.n))
 
 # Flashiness (RBI)
-gg_rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
+gg_rbi <- ggplot(sites, aes(x=log10(rbi), color = dataset)) +
   geom_density(aes(fill= dataset), alpha=0.7) +
   ggtitle("\nDistribution of Hydrologic Flashiness (RBI) in MacroSheds and USGS",
           subtitle = "across sites used in flux analysis\n\n"
@@ -164,10 +168,10 @@ gg_rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
         legend.title = element_blank(), #change legend title font size
         legend.text = element_text(size=24),
         legend.spacing.y = unit(1.0, 'cm')
-        )
-  + annotate("text", x=-0.8, y=0.3, size = 11,
+        ) +
+  annotate("text", x=-1.75, y=0.45, size = 11,
            label= paste0("n = ", ms.n)) +
-  annotate("text", x=-4.2, y=0.3, size = 11,
+  annotate("text", x=-0.3, y=0.45, size = 11,
            label= paste0("n = ", usgs.n)) +
   labs(caption = expression(""^1*"Baker et al. 2004"))
 
