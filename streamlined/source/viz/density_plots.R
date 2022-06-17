@@ -7,11 +7,12 @@ library(wesanderson)
 source("streamlined/source/usgs_helpers.R")
 
 # USGS
-usgs <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv")
-usgs_sites <- c(1,3,8,9,12,13,14,17,18)
-usgs_sites <- usgs[usgs_sites,]$site_code
+# shortcut to Nick's current 'good sites', a df called 'comp_meta'
+load("streamlined//data//site//final_site_list.Rdata") # comp_meta
 
-usgs.df <- get_site_ecoregions(site_data = "streamlined/data/site/usgs_nitrate_sites.csv",
+usgs_sites <- unique(comp_meta$site_code)
+
+usgs.df <- get_site_ecoregions(site_data = usgs_sites,
                     eco_fp = "data/spatial/eco/NA_CEC_Eco_Level2.shp",
                     good_sites = usgs_sites)
 
@@ -55,7 +56,7 @@ my_q <- ms_load_product(
 )
 
 # The current dataset has duplicates of observations, the new version of the dataset
-# does not have that issue but is not on figshare yet. Sorry about that!
+                                        # does not have that issue but is not on figshare yet. Sorry about that!
 my_q <- my_q %>%
     distinct(datetime, site_code, .keep_all = T)
 
@@ -75,18 +76,38 @@ ms.df <- ms.df %>%
 
 st_write(ms.df, "streamlined/data/site/ms_site_info.csv", layer_options = "GEOMETRY=AS_XY")
 
-ms.f <- ms.df %>% st_drop_geometry() %>% mutate(dataset = "macrosheds")
-usgs.f <- usgs.df %>% st_drop_geometry() %>% mutate(dataset = "USGS")
+ms.f <- ms.df %>%
+  mutate(long = unlist(map(ms.df$geometry,1)),
+           lat = unlist(map(ms.df$geometry,2))) %>%
+  st_drop_geometry() %>%
+  mutate(dataset = "MacroSheds")
+
+usgs.f <- usgs.df %>%
+  mutate(long = unlist(map(usgs.df$geometry,1)),
+           lat = unlist(map(usgs.df$geometry,2))) %>%
+  st_drop_geometry() %>%
+  mutate(dataset = "USGS")
+
+# if using compe_meta shortcut
+## sites.safe <- sites
+usgs.f <- comp_meta %>%
+  group_by(site_code) %>%
+  distinct(site_code, .keep_all = TRUE) %>%
+  select(site_code, ws_area_ha, RBI, NA_L2NAME, long, lat) %>%
+  rename(ecoregion = NA_L2NAME,
+         rbi = RBI) %>%
+  mutate(dataset = "USGS")
 
 sites <- rbind(ms.f, usgs.f)
 sites$ws_area_ha <- as.numeric(sites$ws_area_ha)
 sites$rbi <- as.numeric(sites$rbi)
 
+
 # Plots
 names(wes_palettes)
 
 # n
-ms.n <- nrow(sites[sites$dataset == 'macrosheds',])
+ms.n <- nrow(sites[sites$dataset == 'MacroSheds',])
 usgs.n <- nrow(sites[sites$dataset == 'USGS',])
 
 # Watershed Area
@@ -112,7 +133,7 @@ gg_wa <- ggplot(sites, aes(x=log(ws_area_ha), color = dataset)) +
         ## legend.position = 'bottom',
         legend.title = element_blank(), #change legend title font size
         legend.text = element_text(size=24),
-        legend.spacing.y = unit(1.0, 'cm')
+        legend.spacing.y = unit(2.0, 'cm')
         ) +
   annotate("text", x=4, y=0.08, size = 11,
            label= paste0("n = ", ms.n)) +
@@ -129,7 +150,7 @@ gg_rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
   scale_color_manual(values = wes_palette("Royal1", n = 2)) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
-  xlab(expression("\nRichards-Baker (Flashiness) Index (RBI)"^1*"\n")) +
+  xlab(expression("\nLog of Richards-Baker (Flashiness) Index (RBI)"^1*"\n")) +
   ylab("\nDensity\n") +
   theme_few() +
   theme(text = element_text(size=28),
@@ -143,10 +164,10 @@ gg_rbi <- ggplot(sites, aes(x=rbi, color = dataset)) +
         legend.title = element_blank(), #change legend title font size
         legend.text = element_text(size=24),
         legend.spacing.y = unit(1.0, 'cm')
-        ) +
-  annotate("text", x=0.5, y=1.2, size = 11,
+        )
+  + annotate("text", x=-0.8, y=0.3, size = 11,
            label= paste0("n = ", ms.n)) +
-  annotate("text", x=0.13, y=1.2, size = 11,
+  annotate("text", x=-4.2, y=0.3, size = 11,
            label= paste0("n = ", usgs.n)) +
   labs(caption = expression(""^1*"Baker et al. 2004"))
 

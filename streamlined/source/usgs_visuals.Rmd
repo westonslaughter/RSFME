@@ -34,7 +34,7 @@ read_add_site <- function(flux_f){
                method = as.character(method),
                site_code = as.character(site_code),
                thin = as.character(thin))
-    
+   install.packages("lfstat", repos="http://R-Forge.R-project.org") 
     return(fluxes)
 }
 
