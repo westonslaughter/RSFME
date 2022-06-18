@@ -41,6 +41,15 @@ ws <- read.csv("data/general/site_data.csv", colClasses = "character") %>%
 ## eco <- read.csv("data/general/site_eco.csv", colClasses = "character") %>%
 ##   rename(ecoregion = NA_L2NAME) %>%
 ##   select(site_code, ecoregion)
+##
+
+usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv")
+site_vec <- c(1,3,8,9,12,13,14,17,18)
+good_sites <- usgs_n[site_vec,]$site_code
+
+usgs_full <- get_site_ecoregions(site_fp = "streamlined/data/site/usgs_nitrate_sites.csv",
+                    eco_fp = "data/spatial/eco/NA_CEC_Eco_Level2.shp",
+                    good_sites = good_sites)
 
 ## site_codes <- c()
 ## for(row in 1:nrow(eco)) {

@@ -29,6 +29,7 @@ usgs_n <- read_csv("streamlined/data/site/usgs_nitrate_sites.csv") %>%
 # 85% data coverage by day
 good_list <- tibble(site_code = as.character(), 
                     index = as.integer())
+
 for(i in 1:nrow(usgs_n)){ #check for good sites
     #for(i in 1:length(good_sites)){
     # select site #####
@@ -56,7 +57,8 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
         group_by(water_year) %>%
         summarise(n = n()) %>%
         filter(n >= 311)
-    
+## +
+##   labs(caption = "(Pauloo, et al. 2017)")
     conc_check <- raw_data_n %>%
         mutate(date = date(datetime)) %>%
         distinct(., date, .keep_all = TRUE) %>%
