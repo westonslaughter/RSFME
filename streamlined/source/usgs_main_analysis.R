@@ -1,5 +1,5 @@
 # load sources ####
-library(dataRetrieval)
+#remotes::install_github("leppott/ContDataQC")
 library(here)
 library(dplyr)
 library(feather)
@@ -12,6 +12,7 @@ library(feather)
 library(zoo)
 library(lfstat)
 library(RiverLoad)
+library(ContDataQC)
 
 
 source('streamlined/source/usgs_helpers.R')

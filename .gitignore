@@ -8,3 +8,4 @@ riverine_solute_flux_methods_evaluation.Rproj
 /streamlined/out/*
 !/data/general
 plots/
+/streamlined/out_ms/*

@@ -1,8 +1,8 @@
 library(macrosheds)
 
-my_ms_dir <- "streamlined/data/ms/"
+my_ms_dir <- here("streamlined/data/ms")
 
-options(timeout = 600) #default 60 might not be enough if your connection is slow
+options(timeout = 60) #default 60 might not be enough if your connection is slow
 
 ms_sites <- ms_download_site_data()
 ms_networks <- unique(ms_sites$network)
