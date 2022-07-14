@@ -1,4 +1,4 @@
-adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
+adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE){
   
     get_MonthSeq <- function(dates){
         
@@ -76,7 +76,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
                 stop('This site is not in the MacroSheds dataset, provide a site_data table with the names: site_code, ws_area_ha, latitude, longitude')
             }
         } else{
-            if(!all(names(site_data) %in% c('site_code', 'ws_area_ha', 'latitude', 'longitude'))){
+            if(!all(names(site_data) %in% c('site_code', 'ws_area_ha', 'latitude', 'longitude', 'site_type'))){
                 stop('If you are not using a macrosheds site, you must supply site_data with a tibble with the names: site_code, ws_area_ha, latitude, longitude')
             }
             site_data <- site_data %>% 
@@ -90,7 +90,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
         #### Prep Files ####
         
         if(prep_data){
-            
             # EGRET does not like NAs
             stream_chemistry <- stream_chemistry %>%
                 filter(!is.na(val))
@@ -129,7 +128,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
             
             start_date <- if(chem_dates[1] > q_dates[1]) { chem_dates[1] } else{ q_dates[1] }
             end_date <- if(chem_dates[2] < q_dates[2]) { chem_dates[2] } else{ q_dates[2] }
-            
+
             discharge <- discharge %>%
                 filter(datetime >= !!start_date,
                        datetime <= !!end_date)
@@ -171,16 +170,22 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
             select(Name, Date, ConcLow, ConcHigh, Uncen, ConcAve, Julian, Month, Day,
                    DecYear, MonthSeq, waterYear, SinDY, CosDY)
         
-        # Set up EGRET Daily file 
+        # Set up EGRET Daily file
+        # make sure dischagre is daily aggregated
+        discharge_daily <- discharge %>%
+          mutate(datetime = date(datetime)) %>%
+          group_by(datetime, site_code, var, ms_status, ms_interp, year, month) %>%
+          summarise(val = mean(val))
+
         Daily_file <- tibble(Name = site_code,
-                             Date = as.Date(discharge$datetime),
-                             Q = discharge$val/1000,
-                             Julian = as.numeric(julian(lubridate::ymd(discharge$datetime),origin=as.Date("1850-01-01"))),
-                             Month = lubridate::month(discharge$datetime),
-                             Day = lubridate::yday(discharge$datetime),
-                             DecYear = decimalDate(discharge$datetime),
-                             MonthSeq = get_MonthSeq(discharge$datetime),
-                             Qualifier = discharge$ms_status) 
+                             Date = as.Date(discharge_daily$datetime),
+                             Q = discharge_daily$val/1000,
+                             Julian = as.numeric(julian(lubridate::ymd(discharge_daily$datetime),origin=as.Date("1850-01-01"))),
+                             Month = lubridate::month(discharge_daily$datetime),
+                             Day = lubridate::yday(discharge_daily$datetime),
+                             DecYear = decimalDate(discharge_daily$datetime),
+                             MonthSeq = get_MonthSeq(discharge_daily$datetime),
+                             Qualifier = discharge_daily$ms_status)
         
         if(prep_data){
             # Egret can't handle 0 in Q, setting 0 to the minimum Q ever reported seem reasonable 
@@ -284,7 +289,9 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
             return(eList)
         }
         
-        eList <- try(EGRET::modelEstimation(eList, verbose = !quiet))
+        eList <- try(EGRET::modelEstimation(eList,
+                                        minNumObs = 4,
+                                        minNumUncen = 4, verbose = !quiet))
         
         if(inherits(eList, 'try-error')){
             stop('EGRET failed while running WRTDS. See https://github.com/USGS-R/EGRET for reasons data may not be compatible with the WRTDS model.')
@@ -341,7 +348,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, kalman = FALSE){
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,
                         latitude = lat,
-                        longitude = long)
+                        longitude = long,
+                        site_type = 'stream_gauge')
     
     egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem, discharge = ms_q,
                                         prep_data = TRUE, site_data = site_data,

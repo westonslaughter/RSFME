@@ -58,6 +58,7 @@ write_csv(site_data, 'data/general/site_data.csv')
 
 # Variables
 failed_sites <- c()
+## i <- 10
 for(i in 1:nrow(site_var_data)){
     
     # Load in site info 
