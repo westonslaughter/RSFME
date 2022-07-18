@@ -40,14 +40,22 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
     area <- usgs_n$ws_area_ha[i]
     lat <- usgs_n$lat[i]
     long <- usgs_n$long[i]
-    
-    raw_data_n <- read_feather(glue('streamlined/data/raw/nitrate_nitrite_mgl/', site_no, '.feather'))
-    raw_data_q <- read_feather(glue('streamlined/data/raw/q_cfs/', site_no, '.feather')) %>%
-        group_by(datetime = date(datetime)) %>%
-        summarize(val = mean(val)) %>%
-        mutate(var = 'q_cfs',
-               site_code = site_no) %>%
-        select(site_code, datetime, var, val)
+
+  tryCatch(
+    expr = {
+      print(paste("---- attempting read:", site_no))
+      raw_data_n <- read_feather(glue('streamlined/data/raw/nitrate_nitrite_mgl/', site_no, '.feather'))
+      raw_data_q <- read_feather(glue('streamlined/data/raw/q_cfs/', site_no, '.feather')) %>%
+          group_by(datetime = date(datetime)) %>%
+          summarize(val = mean(val)) %>%
+          mutate(var = 'q_cfs',
+                 site_code = site_no) %>%
+          select(site_code, datetime, var, val)
+    },
+    error = function(e) {
+      print('ERROR', site_no)
+    }
+    )
     
     #### isolate to full years######
     
@@ -76,9 +84,13 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
         
         append <- tibble(site_code = site_no, index = i)
         good_list <- rbind(good_list, append)
-        
-    }else{print('fail')}
+        print(paste(' SUCCESS', site_no, '  years:', length(good_years)))
+    }else{
+      print('fail')
+    }
 }
+
+i <- 32
 
 for(i in 1:nrow(good_list)){
 # select site #####
@@ -139,6 +151,7 @@ raw_data_full_pre <- rbind(daily_data_n, raw_data_q) %>%
 
 
 # Loop through good years ####
+## t <- 12
 # needs DAILY q and any chem
 for(t in 1:length(good_years)){
 target_year <- as.numeric(as.character(good_years[t]))
@@ -294,18 +307,26 @@ calculate_rating <- function(chem_df, q_df){
 flux_from_daily_rating <- calculate_rating(chem_df, prep_data_q)
 
 ###### calculate wrtds ######
-#Currently not working
-# egret_q <- raw_data_q %>%
-#     mutate(q_lps = val*28.316847) %>%
-#     select(date = datetime, q_lps)
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
 
+  tryCatch(
+    expr = {
+      egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
 
-# egret_flux <- try(adapt_ms_egret(chem_df = thinned_daily_c,
-#                                  q_df = prep_data_q,
-#                                  ws_size = area,
-#                                  lat = lat,
-#                                  long = long))
+      flux_from_egret <- egret_results$Daily %>%
+        sum(.)/(1000*area)
+    },
+    error = function(e) {
+      print('ERROR, EGRET FAILED')
+    })
+  return(flux_from_egret)
+}
 
+flux_from_daily_wrtds <- calculate_wrtds(chem_df = thinned_daily_c,
+                                 q_df = prep_data_q,
+                                 ws_size = area,
+                                 lat = lat,
+                                 long = long)
 
 ###### calculate composite ######
 generate_residual_corrected_con <- function(chem_df, q_df){
@@ -359,10 +380,13 @@ flux_from_daily_comp <- calculate_composite_from_rating_filled_df(rating_filled_
 
 ##### congeal daily ####
 daily_out <- tibble(wy = flux_from_daily_comp$wy[1], 
-                    flux = c(flux_from_daily_pw, flux_from_daily_beale, 
-                                                flux_from_daily_rating, flux_from_daily_comp$flux[1]),
+                    flux = c(flux_from_daily_pw,
+                             flux_from_daily_beale,
+                             flux_from_daily_rating,
+                             flux_from_daily_wrtds$Daily,
+                             flux_from_daily_comp$flux[1]),
                     site_code = flux_from_daily_comp$site_code[1], 
-                    method = c('pw', 'beale', 'rating', 'composite'),
+                    method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                     thin = 'daily')
 
 

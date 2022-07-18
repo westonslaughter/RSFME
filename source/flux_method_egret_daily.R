@@ -183,7 +183,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                              Julian = as.numeric(julian(lubridate::ymd(discharge_daily$datetime),origin=as.Date("1850-01-01"))),
                              Month = lubridate::month(discharge_daily$datetime),
                              Day = lubridate::yday(discharge_daily$datetime),
-                             DecYear = decimalDate(discharge_daily$datetime),
+                             DecYear = decimalDateWY(discharge_daily$datetime),
                              MonthSeq = get_MonthSeq(discharge_daily$datetime),
                              Qualifier = discharge_daily$ms_status)
         
@@ -283,15 +283,15 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                             paLong = 12)
         
         eList <- EGRET::mergeReport(INFO_file, Daily_file, Sample_file,
-                                    verbose = !quiet)
+                                    verbose = TRUE)
         
         if(! run_egret){
             return(eList)
         }
         
-        eList <- try(EGRET::modelEstimation(eList,
+        eList <- try(modelEstimation(eList,
                                         minNumObs = 4,
-                                        minNumUncen = 4, verbose = !quiet))
+                                        minNumUncen = 4, verbose = TRUE))
         
         if(inherits(eList, 'try-error')){
             stop('EGRET failed while running WRTDS. See https://github.com/USGS-R/EGRET for reasons data may not be compatible with the WRTDS model.')
@@ -353,13 +353,9 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
     
     egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem, discharge = ms_q,
                                         prep_data = TRUE, site_data = site_data,
-                                        kalman = kalman, run_egret = FALSE)
-    
-    eList <- try(EGRET::modelEstimation(egret_results, verbose = TRUE,
-                                        minNumObs = 4,
-                                        minNumUncen = 4))
-    
-    return(eList)
+                                        kalman = kalman, run_egret = TRUE)
+
+    return(egret_results)
 }
 
 # run_output <- adapt_ms_egret(chem_df = ocon_chem, q_df = ocon_q, ws_size = ocon_ws_area_ha)

@@ -13,10 +13,12 @@ library(feather)
 library(zoo)
 library(lfstat)
 library(RiverLoad)
+
 # read in df of USGS sites w continous Nitrate
 usgs <- read.csv("streamlined/data/site/usgs_nitrate_sites.csv",
-                 colClasses = "character") %>%
-    filter(!site_code %in% done_sites_0615) # this is here so i'm not downloading things i already have it will not work from the top
+                 colClasses = "character")
+## %>% WS: commenting out because not sure where this object comes from
+##     filter(!site_code %in% done_sites_0615) # this is here so i'm not downloading things i already have it will not work from the top
 
 
 # Parameter
@@ -101,4 +103,5 @@ for(i in 1:length(sites)){
                       s = site_code)
 
     write_feather(q_data, file_path)
+    print(paste(site_code, 'done'))
 }
