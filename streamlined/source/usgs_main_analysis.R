@@ -151,7 +151,7 @@ raw_data_full_pre <- rbind(daily_data_n, raw_data_q) %>%
 
 
 # Loop through good years ####
-## t <- 12
+## t <- 1
 # needs DAILY q and any chem
 for(t in 1:length(good_years)){
 target_year <- as.numeric(as.character(good_years[t]))
@@ -307,14 +307,17 @@ calculate_rating <- function(chem_df, q_df){
 flux_from_daily_rating <- calculate_rating(chem_df, prep_data_q)
 
 ###### calculate wrtds ######
+library(EGRET)
+source('streamlined/source/egret_overwrites.R')
+
 calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
 
   tryCatch(
     expr = {
       egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
 
-      flux_from_egret <- egret_results$Daily %>%
-        sum(.)/(1000*area)
+      flux_from_egret <- egret_results$Daily$FluxDay %>%
+        sum(.)/(1000 * area)
     },
     error = function(e) {
       print('ERROR, EGRET FAILED')
@@ -322,7 +325,8 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
   return(flux_from_egret)
 }
 
-flux_from_daily_wrtds <- calculate_wrtds(chem_df = thinned_daily_c,
+flux_from_daily_wrtds <- calculate_wrtds(
+  chem_df = thinned_daily_c,
                                  q_df = prep_data_q,
                                  ws_size = area,
                                  lat = lat,

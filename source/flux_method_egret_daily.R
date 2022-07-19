@@ -162,7 +162,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                               Julian = as.numeric(julian(lubridate::ymd(stream_chemistry$datetime),origin=as.Date("1850-01-01"))),
                               Month = lubridate::month(stream_chemistry$datetime),
                               Day = lubridate::yday(stream_chemistry$datetime),
-                              DecYear = decimalDate(stream_chemistry$datetime),
+                              DecYear = decimalDateWY(stream_chemistry$datetime),
                               MonthSeq = get_MonthSeq(stream_chemistry$datetime)) %>%
             mutate(SinDY = sin(2*pi*DecYear),
                    CosDY = cos(2*pi*DecYear))  %>%
@@ -179,6 +179,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
         Daily_file <- tibble(Name = site_code,
                              Date = as.Date(discharge_daily$datetime),
+                             # converting lps to m^3/s
                              Q = discharge_daily$val/1000,
                              Julian = as.numeric(julian(lubridate::ymd(discharge_daily$datetime),origin=as.Date("1850-01-01"))),
                              Month = lubridate::month(discharge_daily$datetime),
@@ -344,6 +345,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
              ms_interp = 0) %>%
       rename(val = q_lps,
              datetime = date)
+        ## mutate(val = val*0.001) # convert lps to cubic meters per second)
     
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,
@@ -359,7 +361,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 }
 
 # run_output <- adapt_ms_egret(chem_df = ocon_chem, q_df = ocon_q, ws_size = ocon_ws_area_ha)
-# EGRET::plotConcHist(run_output)
-# EGRET::plotConcTime(run_output)
-# EGRET::plotFluxQ(run_output)
-# EGRET::plotConcPred(run_output)
+## EGRET::plotConcHist(egret_results)
+## EGRET::plotConcTime(egret_results)
+## EGRET::plotFluxQ(egret_results)
+## EGRET::plotConcPred(egret_results)

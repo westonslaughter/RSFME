@@ -1,8 +1,3 @@
-date <- '2020-03-01'
-date <- '2021-03-01'
-
-dates <- discharge_daily$datetime
-
 decimalDateWY <- function(dates, wy_type = 'usgs') {
     yd <- index(dates) - 1
     ## yend <- yday(as.Date(paste0(year(dates), "-12-31")))
@@ -61,9 +56,7 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
       stepLogQ<-surfaceIndexParameters[['stepLogQ']]
       nVectorLogQ<-surfaceIndexParameters[['nVectorLogQ']]
       LogQ <- seq(bottomLogQ, by=stepLogQ, length.out=nVectorLogQ)
-    }
-
-  }
+    }}
 
   if("Year" %in% names(attributes(localsurfaces))){
     Year <- attr(localsurfaces, "Year")
@@ -77,8 +70,7 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
       stepYear <- surfaceIndexParameters[['stepYear']]
       nVectorYear <- surfaceIndexParameters[['nVectorYear']]
       Year <- seq(bottomYear, by=stepYear, length.out=nVectorYear)
-    }
-  }
+    }}
 
   # Using the above data structure as a "look-up" table, list all LogQ values that occured on every
   # day of the entire daily record. When "unlisted" into a vector, these will become the "x" values
