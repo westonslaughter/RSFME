@@ -1,12 +1,3 @@
-decimalDateWY <- function(dates, wy_type = 'usgs') {
-    yd <- index(dates) - 1
-    ## yend <- yday(as.Date(paste0(year(dates), "-12-31")))
-    yend <- rep(length(dates), length(dates))
-
-    ydec <- as.integer(as.character(water_year(dates, wy_type))) + yd/yend
-
-  return(ydec)
-}
 
 estDailyFromSurfaces <- function(eList, localsurfaces = NA, localDaily = NA) {
 

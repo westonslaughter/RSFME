@@ -192,12 +192,17 @@ rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
 
 # calculate true annual flux
 true_flux <- rating_filled_df %>%
-    mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
+  mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
     group_by(wy) %>%
     summarize(flux = sum(flux)) %>%
     mutate(site_code = site_no,
            method = 'true',
            thin = 'none')
+
+
+true_flux_d <- rating_filled_df %>%
+  mutate(flux = con_com*q_lps*86400*(1/area)*1e-6)
+plot(true_flux_d$date, true_flux_d$flux)
 
 ###### prep q data#####
 prep_data_q <- raw_data_q %>%
@@ -209,10 +214,10 @@ prep_data_q <- raw_data_q %>%
 
 ### THIN data to selected intervals #######
 thinned_daily_c <- raw_data_n %>%
-    filter(hour(datetime) %in% c(13:18)) %>%
+  filter(hour(datetime) %in% c(13:18)) %>%
     mutate(date = lubridate::date(datetime),
            wy = water_year(datetime, origin = 'usgs')) %>%
-    distinct(date, .keep_all = T) %>%
+  distinct(date, .keep_all = T) %>%
     select(-datetime, -var) %>%
     rename(con = val) %>%
     filter(wy == target_year)
@@ -326,7 +331,7 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
 }
 
 flux_from_daily_wrtds <- calculate_wrtds(
-  chem_df = thinned_daily_c,
+  chem_df = chem_df,
                                  q_df = prep_data_q,
                                  ws_size = area,
                                  lat = lat,

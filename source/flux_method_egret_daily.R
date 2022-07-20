@@ -23,7 +23,38 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         DecYear <- year + as.numeric(difftime(dateTime, startYear, units = "secs"))/as.numeric(difftime(endYear, startYear, units = "secs"))
         return(DecYear)
     }
-    
+
+
+    decimalDateWY <- function(dates, wy_type = 'usgs') {
+        yd <- index(dates) - 1
+        yend <- rep(length(dates), length(dates))
+
+        ydec <- as.integer(as.character(water_year(dates, wy_type))) + yd/yend
+
+      return(ydec)
+    }
+
+    wyday <- function(dates, wy_type = 'usgs') {
+      wy_firsthalf <- index(dates[month(dates) %in% c(10, 11, 12)])
+      wy_secondhalf <- index(dates[!month(dates) %in% c(10, 11, 12)]) + max(wy_firsthalf)
+      wydays <- c(wy_firsthalf, wy_secondhalf)
+
+      ## # return 'day of wy', accounting for leap years
+      ## # is second half (the half containing february) of WY a leap year
+      ## if(TRUE %in% leap_year(dates[!month(dates) %in% c(10, 11, 12)])) {
+
+      ## # if not, is first half a leap year?
+      ## } else if(TRUE %in% leap_year(testdates[month(testdates) %in% c(10, 11, 12)]) {
+
+      ## # neither leap year, proceed normally
+      ## } else {
+      ## wyday <- yday(dates)
+      ## }
+      return(wydays)
+    }
+
+
+
     get_start_end <- function(d){
         start_date <- min(d$datetime)
         start_year <- lubridate::year(start_date)
@@ -161,7 +192,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                               ConcAve = stream_chemistry$val,
                               Julian = as.numeric(julian(lubridate::ymd(stream_chemistry$datetime),origin=as.Date("1850-01-01"))),
                               Month = lubridate::month(stream_chemistry$datetime),
-                              Day = lubridate::yday(stream_chemistry$datetime),
+                              Day = wyday(stream_chemistry$datetime),
                               DecYear = decimalDateWY(stream_chemistry$datetime),
                               MonthSeq = get_MonthSeq(stream_chemistry$datetime)) %>%
             mutate(SinDY = sin(2*pi*DecYear),
@@ -183,7 +214,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                              Q = discharge_daily$val/1000,
                              Julian = as.numeric(julian(lubridate::ymd(discharge_daily$datetime),origin=as.Date("1850-01-01"))),
                              Month = lubridate::month(discharge_daily$datetime),
-                             Day = lubridate::yday(discharge_daily$datetime),
+                             Day = wyday(discharge_daily$datetime),
                              DecYear = decimalDateWY(discharge_daily$datetime),
                              MonthSeq = get_MonthSeq(discharge_daily$datetime),
                              Qualifier = discharge_daily$ms_status)
@@ -224,7 +255,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         site_ws_area <- site_data %>%
             filter(site_code == !!site_code,
                    site_type == 'stream_gauge') %>%
-            pull('ws_area_ha') 
+            pull('ws_area_ha')
+        # ws area cange
         site_ws_area <- site_ws_area / 100
         
         new_point <- sf::st_sfc(sf::st_point(c(site_lon, site_lat)), crs = 4326) %>%
@@ -259,7 +291,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                             instruments_cd = NA,
                             construction_dt = NA,
                             inventory_dt = NA,
-                            drain_area_va = site_ws_area*2.59,
+                            # ws area change (hectares to square miles)
+                            drain_area_va = area / 2.59,
                             contrib_drain_area_va = NA,
                             tz_cd = 'UTC',
                             local_time_fg = 'Y',
@@ -337,7 +370,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
            ms_interp = 0) %>%
       rename(val = con,
              datetime = date)
-    
+
     ms_q <- q_df %>%
       mutate(site_code = 'none',
              var = 'IS_discharge',
@@ -345,8 +378,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
              ms_interp = 0) %>%
       rename(val = q_lps,
              datetime = date)
-        ## mutate(val = val*0.001) # convert lps to cubic meters per second)
-    
+
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,
                         latitude = lat,
