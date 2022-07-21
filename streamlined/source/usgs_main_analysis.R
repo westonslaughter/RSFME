@@ -90,7 +90,7 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
     }
 }
 
-i <- 32
+## i <- 32
 
 for(i in 1:nrow(good_list)){
 # select site #####
@@ -202,7 +202,7 @@ true_flux <- rating_filled_df %>%
 
 true_flux_d <- rating_filled_df %>%
   mutate(flux = con_com*q_lps*86400*(1/area)*1e-6)
-plot(true_flux_d$date, true_flux_d$flux)
+## plot(true_flux_d$date, true_flux_d$flux)
 
 ###### prep q data#####
 prep_data_q <- raw_data_q %>%
@@ -323,8 +323,15 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
       egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
 
       flux_from_egret <- egret_results$Daily$FluxDay %>%
-        # still looking for reason why wrtds is 1K higher than others
-        sum(.)/(1000 * area)
+            # still looking for reason why wrtds is 1K higher than others
+        sum(.)/(area)
+
+      if(is.na(flux_from_egret)) {
+        print('ERROR: flux failed to sum, ignoring NAs')
+        ed.flux <- egret_results$Daily$FluxDay
+        flux_from_egret <- ed.flux[!is.infinite(ed.flux)] %>%
+          sum(., na.rm = TRUE)/(area)
+      }
     },
     error = function(e) {
       print('ERROR, EGRET FAILED')
@@ -427,10 +434,13 @@ flux_from_weekly_comp <- calculate_composite_from_rating_filled_df(rating_filled
 
 ##### congeal weekly ####
 weekly_out <- tibble(wy = flux_from_weekly_comp$wy[1], 
-                    flux = c(flux_from_weekly_pw, flux_from_weekly_beale, 
-                             flux_from_weekly_rating, flux_from_weekly_comp$flux[1]),
+                     flux = c(flux_from_weekly_pw,
+                              flux_from_weekly_beale,
+                              flux_from_weekly_rating,
+                              flux_from_weekly_wrtds,
+                              flux_from_weekly_comp$flux[1]),
                     site_code = flux_from_weekly_comp$site_code[1], 
-                    method = c('pw', 'beale', 'rating', 'composite'),
+                    method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                     thin = 'weekly')
 
 ## BIWEEKLY ######
@@ -459,10 +469,13 @@ flux_from_biweekly_comp <- calculate_composite_from_rating_filled_df(rating_fill
 
 ##### congeal biweekly ####
 biweekly_out <- tibble(wy = flux_from_biweekly_comp$wy[1], 
-                     flux = c(flux_from_biweekly_pw, flux_from_biweekly_beale, 
-                              flux_from_biweekly_rating, flux_from_biweekly_comp$flux[1]),
+                       flux = c(flux_from_biweekly_pw,
+                                flux_from_biweekly_beale,
+                                flux_from_biweekly_rating,
+                                flux_from_biweekly_wrtds,
+                                flux_from_biweekly_comp$flux[1]),
                      site_code = flux_from_biweekly_comp$site_code[1], 
-                     method = c('pw', 'beale', 'rating', 'composite'),
+                     method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                      thin = 'biweekly')
 
 ## MONTHLY ######
@@ -491,14 +504,18 @@ flux_from_monthly_comp <- calculate_composite_from_rating_filled_df(rating_fille
 
 ##### congeal monthly ####
 monthly_out <- tibble(wy = flux_from_monthly_comp$wy[1], 
-                        flux = c(flux_from_monthly_pw, flux_from_monthly_beale, 
-                                 flux_from_monthly_rating, flux_from_monthly_comp$flux[1]),
+                      flux = c(flux_from_monthly_pw,
+                               flux_from_monthly_beale,
+                               flux_from_monthly_rating,
+                               flux_from_monthly_wrtds,
+                               flux_from_monthly_comp$flux[1]),
                         site_code = flux_from_monthly_comp$site_code[1], 
-                        method = c('pw', 'beale', 'rating', 'composite'),
+                        method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                         thin = 'monthly')
 
 ## QUARTERLY ######
 chem_df <- thinned_quarterly_c
+
 ###### calculate period weighted#########
 flux_from_quarterly_pw <- calculate_pw(chem_df, prep_data_q)
 
@@ -523,10 +540,13 @@ flux_from_quarterly_comp <- calculate_composite_from_rating_filled_df(rating_fil
 
 ##### congeal quarterly ####
 quarterly_out <- tibble(wy = flux_from_quarterly_comp$wy[1], 
-                       flux = c(flux_from_quarterly_pw, flux_from_quarterly_beale, 
-                                flux_from_quarterly_rating, flux_from_quarterly_comp$flux[1]),
+                        flux = c(flux_from_quarterly_pw,
+                                 flux_from_quarterly_beale,
+                                 flux_from_quarterly_rating,
+                                 flux_from_quarterly_wrtds,
+                                 flux_from_quarterly_comp$flux[1]),
                        site_code = flux_from_quarterly_comp$site_code[1], 
-                       method = c('pw', 'beale', 'rating', 'composite'),
+                       method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                        thin = 'quarterly')
 
 ## congeal results ####
@@ -544,6 +564,7 @@ file_path <- glue('{directory}/{s}.feather',
 write_feather(out_frame, file_path)
 ## take meta and save out of loop ####
 meta_n <- raw_data_n %>%
+  mutate(wy = water_year(datetime)) %>%
     filter(wy == target_year)
 
 out_meta <- tibble(max_q_lps = max(prep_data_q$q_lps, na.rm = T),

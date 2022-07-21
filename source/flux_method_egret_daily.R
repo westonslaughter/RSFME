@@ -16,7 +16,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         
         dateTime <- as.POSIXlt(rawData)
         year <- dateTime$year + 1900
-        
+firsthalf
         startYear <- as.POSIXct(paste0(year,"-01-01 00:00"))
         endYear <- as.POSIXct(paste0(year+1,"-01-01 00:00"))
         
@@ -25,34 +25,48 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
     }
 
 
-    decimalDateWY <- function(dates, wy_type = 'usgs') {
-        yd <- index(dates) - 1
-        yend <- rep(length(dates), length(dates))
-
-        ydec <- as.integer(as.character(water_year(dates, wy_type))) + yd/yend
-
-      return(ydec)
-    }
 
     wyday <- function(dates, wy_type = 'usgs') {
-      wy_firsthalf <- index(dates[month(dates) %in% c(10, 11, 12)])
-      wy_secondhalf <- index(dates[!month(dates) %in% c(10, 11, 12)]) + max(wy_firsthalf)
-      wydays <- c(wy_firsthalf, wy_secondhalf)
+        # get earliest and latest date from series
+        start_date <- min(dates)
+        end_date <- max(dates)
 
-      ## # return 'day of wy', accounting for leap years
-      ## # is second half (the half containing february) of WY a leap year
-      ## if(TRUE %in% leap_year(dates[!month(dates) %in% c(10, 11, 12)])) {
+        # get the normal year, and make the start of WY date from that year
+        year_firsthalf <- year(start_date)
+        wy_start <- paste0(year_firsthalf, '-10-01')
+        wy_end <- paste0(year_firsthalf+1, '-09-30')
 
-      ## # if not, is first half a leap year?
-      ## } else if(TRUE %in% leap_year(testdates[month(testdates) %in% c(10, 11, 12)]) {
+        # gap between start WY and end of normal year, always 91 days
+        correction_val <- yday('2021-12-31') - yday('2021-10-01')
 
-      ## # neither leap year, proceed normally
-      ## } else {
-      ## wyday <- yday(dates)
-      ## }
+
+        # adjust yday from start of gregorian year to (usgs) WY year
+        wy_firsthalf <- yday(dates[month(dates) %in% c(10, 11, 12)]) - yday(wy_start) + 1
+        wy_secondhalf <- yday(dates[!month(dates) %in% c(10, 11, 12)]) + correction_val + 1
+
+        wydays <- c(wy_firsthalf, wy_secondhalf)
+
       return(wydays)
     }
 
+    decimalDateWY <- function(dates, wy_type = 'usgs') {
+        # get earliest and latest date from series
+        start_date <- min(dates)
+        end_date <- max(dates)
+
+        # get the normal year, and make the start of WY date from that year
+        year_firsthalf <- year(start_date)
+        wy_start <- paste0(year_firsthalf, '-10-01')
+        wy_end <- paste0(year_firsthalf+1, '-09-30')
+        wy_seq <- seq(as.Date(wy_start), as.Date(wy_end), by = 1)
+
+        wydays <- wyday(dates) - 1
+        wylength <- length(wy_seq)
+
+        ydec <- as.integer(as.character(water_year(dates, wy_type))) + wydays/wylength
+
+      return(ydec)
+    }
 
 
     get_start_end <- function(d){
@@ -324,8 +338,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         }
         
         eList <- try(modelEstimation(eList,
-                                        minNumObs = 4,
-                                        minNumUncen = 4, verbose = TRUE))
+                                        minNumObs = 2,
+                                        minNumUncen = 2, verbose = TRUE))
         
         if(inherits(eList, 'try-error')){
             stop('EGRET failed while running WRTDS. See https://github.com/USGS-R/EGRET for reasons data may not be compatible with the WRTDS model.')
