@@ -282,6 +282,7 @@ prep_raw_for_riverload <- function(chem_df, q_df){
     
     return(db)
 }
+
 ### DAILY ######
 chem_df <- thinned_daily_c
 ###### calculate period weighted#########
@@ -322,6 +323,7 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
       egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
 
       flux_from_egret <- egret_results$Daily$FluxDay %>%
+        # still looking for reason why wrtds is 1K higher than others
         sum(.)/(1000 * area)
     },
     error = function(e) {
@@ -392,7 +394,7 @@ daily_out <- tibble(wy = flux_from_daily_comp$wy[1],
                     flux = c(flux_from_daily_pw,
                              flux_from_daily_beale,
                              flux_from_daily_rating,
-                             flux_from_daily_wrtds$Daily,
+                             flux_from_daily_wrtds,
                              flux_from_daily_comp$flux[1]),
                     site_code = flux_from_daily_comp$site_code[1], 
                     method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
@@ -411,6 +413,11 @@ flux_from_weekly_beale <- calculate_beale(chem_df, prep_data_q)
 flux_from_weekly_rating <- calculate_beale(chem_df, prep_data_q)
 
 #### calculate wrtds ######
+flux_from_weekly_wrtds <- calculate_wrtds(chem_df,
+                                          prep_data_q,
+                                          ws_size = area,
+                                          lat = lat,
+                                          long = long)
 
 #### calculate composite ######
 rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
@@ -438,6 +445,11 @@ flux_from_biweekly_beale <- calculate_beale(chem_df, prep_data_q)
 flux_from_biweekly_rating <- calculate_rating(chem_df, prep_data_q)
 
 #### calculate wrtds ######
+flux_from_biweekly_wrtds <- calculate_wrtds(chem_df,
+                                          prep_data_q,
+                                          ws_size = area,
+                                          lat = lat,
+                                          long = long)
 
 #### calculate composite ######
 rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
@@ -465,6 +477,11 @@ flux_from_monthly_beale <- calculate_beale(chem_df, prep_data_q)
 flux_from_monthly_rating <- calculate_rating(chem_df, prep_data_q)
 
 #### calculate wrtds ######
+flux_from_monthly_wrtds <- calculate_wrtds(chem_df,
+                                          prep_data_q,
+                                          ws_size = area,
+                                          lat = lat,
+                                          long = long)
 
 #### calculate composite ######
 rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
@@ -492,6 +509,11 @@ flux_from_quarterly_beale <- calculate_beale(chem_df, prep_data_q)
 flux_from_quarterly_rating <- calculate_beale(chem_df, prep_data_q)
 
 #### calculate wrtds ######
+flux_from_quarterly_wrtds <- calculate_wrtds(chem_df,
+                                          prep_data_q,
+                                          ws_size = area,
+                                          lat = lat,
+                                          long = long)
 
 #### calculate composite ######
 rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
