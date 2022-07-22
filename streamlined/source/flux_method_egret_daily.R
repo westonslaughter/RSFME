@@ -83,16 +83,16 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
         # if first half of WY is a leap year,
         if(366 %in% wy_firsthalf) {
-          print('first half of WY is leap year, adjusting')
+          ## print('first half of WY is leap year, adjusting')
           wy_firsthalf = wy_firsthalf - 1
         } else if(366 %in% wy_secondhalf) {
-          print('second half of WY is leap year, no action')
+          ## print('second half of WY is leap year, no action')
         } else {
-          print('neither side of water year is a leap year')
+          ## print('neither side of water year is a leap year')
+          invisible()
         }
 
         # adjust yday from start of gregorian year to (usgs) WY year
-
         wy_ydays <- c(wy_firsthalf, wy_secondhalf)
 
       return(wy_ydays)

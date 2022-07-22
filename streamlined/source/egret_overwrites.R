@@ -1,4 +1,3 @@
-
 estDailyFromSurfaces <- function(eList, localsurfaces = NA, localDaily = NA) {
   ## localsurfaces = NA
   ## localDaily = NA
@@ -6,8 +5,6 @@ estDailyFromSurfaces <- function(eList, localsurfaces = NA, localDaily = NA) {
   if(!is.egret(eList)){
     stop("Please check eList argument")
   }
-
-  print('estDailyFromSurfaces')
 
   localDaily <- getSurfaceEstimates(eList, localsurfaces=localsurfaces, localDaily = localDaily)
 
@@ -32,9 +29,6 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
   if(all(is.na(localsurfaces))){
     localsurfaces <- getSurfaces(eList)
   }
-
-
-  print('getConcFluxFromSurface')
 
   # First argument in calls below is the "known" x-y-z surface, second argument is matrix of
   # "target" x-y points.
@@ -71,15 +65,6 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
   # for the interpolation.
   allLogQsReplicated <- allLogQsByDayOfYear[as.character(localDaily$Day)]
 
-  ## for(i in localDaily$Day){
-  ##   lookup <- allLogQsByDayOfYear[i]
-
-  ##   if(is.na(names(lookup))) {
-  ##     print(i)
-  ##     print(lookup)
-  ##   }
-  ## }
-
   # Replicate the decimal year field for each day of the record to correspond to all the LogQ
   # values listed for that day. These are the "y" values for the interpolation.
   allDatesReplicated <- rep(localDaily$DecYear, lapply(allLogQsReplicated, length))
@@ -107,8 +92,6 @@ getSurfaceEstimates <- function(eList, localsurfaces=NA, localDaily = NA){
     localsurfaces <- getSurfaces(eList)
   }
 
-  print('getSurfaceEstimates')
-
   if("LogQ" %in% names(attributes(localsurfaces))){
     LogQ <- attr(localsurfaces, "LogQ")
   } else {
@@ -135,8 +118,6 @@ getSurfaceEstimates <- function(eList, localsurfaces=NA, localDaily = NA){
 }
 
 bin_Qs <- function(localDaily){
-
-  print('binQs')
   allLogQsByDayOfYear <- split(localDaily$LogQ, localDaily$Day)
 
   # account for leap day, day of year '60'
@@ -153,8 +134,6 @@ modelEstimation<-function(eList,
                           minNumObs = 100, minNumUncen = 50,
                           edgeAdjust = TRUE, verbose = TRUE,
                           run.parallel = FALSE){
-
-  print('----------------- MODEL ESTIMATION')
 
   if(!is.egret(eList)){
     stop("Please check eList argument")
