@@ -13,14 +13,14 @@ library(zoo)
 library(lfstat)
 library(RiverLoad)
 library(ContDataQC)
-
-# WRTDS imports
 library(EGRET)
+
+## Local Imports
+# flux helpers
 source('streamlined/source/flux_method_egret_daily.R')
 source('streamlined/source/egret_overwrites.R')
-
+source('streamlined/source/flux_methods.R')
 # general helpers
-#source('streamlined/source/usgs_retrieval.R')
 source('streamlined/source/usgs_helpers.R')
 source('source/helper_functions.R')
 
@@ -206,23 +206,6 @@ for(i in 1:nrow(good_list)){
 
         rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
 
-        warn_sum <- function(x) {
-          if(TRUE %in% is.na(x)) {
-            xsum <- sum(x, na.rm = TRUE)
-
-            # length of record, and NAs in record
-            n_x <- length(x)
-            n_na <- length(x[is.na(x)])
-
-            writeLines(paste('NAs found in flux record, ignoring during SUM. \n count NA:',
-                        n_na,
-                        '\n percent NA:', (n_na/n_x) * 100))
-          } else {
-            xsum <- sum(x)
-          }
-          return(xsum)
-        }
-
         # calculate true annual flux
         true_flux <- rating_filled_df %>%
           mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
@@ -291,75 +274,20 @@ for(i in 1:nrow(good_list)){
                                      thinned_monthly_c[as.integer(.75*nmonth),],
                                      thinned_monthly_c[nmonth,])
 
-        ### Riverload conversion function #####
-        prep_raw_for_riverload <- function(chem_df, q_df){
-            conv_q <- q_df %>%
-                mutate(datetime = as.POSIXct(date, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
-                mutate(flow = q_lps*0.001) %>% # convert lps to cubic meters per second)
-                select(datetime, flow) %>%
-                data.frame()
-
-            conv_c <- chem_df %>%
-                mutate(datetime = as.POSIXct(date, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
-                select(datetime, con) %>%
-                data.frame()
-
-            db <- full_join(conv_q, conv_c, by = "datetime") %>%
-                #filter(!is.na(flow)) %>%
-                arrange(datetime)
-
-            return(db)
-        }
-
         ### DAILY ######
         print('DAILY')
         chem_df <- thinned_daily_c
-        ###### calculate period weighted#########
-        calculate_pw <- function(chem_df, q_df){
-        rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df)
 
-        flux_from_pw <- method1(rl_data, ncomp = 1) %>%
-            sum(.)/(1000*area)
-        return(flux_from_pw)
-        }
+        ###### calculate period weighted#########
         flux_from_daily_pw <- calculate_pw(chem_df, prep_data_q)
 
         ###### calculate beale ######
-        calculate_beale <- function(chem_df, q_df){
-            rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df)
-        flux_from_beale <- beale.ratio(rl_data, ncomp = 1) %>%
-            sum(.)/(1000*area)
-        return(flux_from_beale)
-        }
         flux_from_daily_beale <- calculate_beale(chem_df, prep_data_q)
+
         ##### calculate rating #####
-        calculate_rating <- function(chem_df, q_df){
-            rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df)
-            flux_from_reg <- RiverLoad::rating(rl_data, ncomp = 1) %>%
-                sum(.)/(1000*area)
-            return(flux_from_reg)
-        }
         flux_from_daily_rating <- calculate_rating(chem_df, prep_data_q)
 
         ###### calculate wrtds ######
-
-        calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
-
-          tryCatch(
-            expr = {
-              egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
-
-              # still looking for reason why wrtds is 1K higher than others
-              flux_from_egret <- egret_results$Daily$FluxDay %>%
-                warn_sum(.)/(area)
-
-            },
-            error = function(e) {
-              print('ERROR, EGRET FAILED')
-            })
-          return(flux_from_egret)
-        }
-
         flux_from_daily_wrtds <- calculate_wrtds(
           chem_df = chem_df,
           q_df = prep_data_q,
@@ -415,13 +343,6 @@ for(i in 1:nrow(good_list)){
                                         q_df = prep_data_q)
 
         # calculate annual flux from composite
-        calculate_composite_from_rating_filled_df <- function(rating_filled_df){
-        flux_from__comp <- rating_filled_df %>%
-            mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
-            group_by(wy) %>%
-            summarize(flux = sum(flux)) %>%
-            mutate(site_code = site_no)
-        }
         flux_from_daily_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
 
         ##### congeal daily ####
@@ -579,9 +500,10 @@ for(i in 1:nrow(good_list)){
                                          flux_from_quarterly_beale,
                                          flux_from_quarterly_rating,
                                          ## flux_from_quarterly_wrtds,
+                                         NA,
                                          flux_from_quarterly_comp$flux[1]),
                                site_code = flux_from_quarterly_comp$site_code[1],
-                               method = c('pw', 'beale', 'rating', 'composite'),
+                               method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                                thin = 'quarterly')
 
         ## congeal results ####
