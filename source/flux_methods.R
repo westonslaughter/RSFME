@@ -47,10 +47,10 @@ calculate_rating <- function(chem_df, q_df, datecol = 'date'){
 
 
 ##### calculate WRTDS #####
-calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date') {
   tryCatch(
     expr = {
-        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
+        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
 
         # still looking for reason why wrtds is 1K higher than others
         flux_from_egret <- egret_results$Daily$FluxDay %>%
@@ -111,7 +111,9 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df){
         return(flux_from__comp)
         }
 
-adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE){
+# wrapper for WRTDS in EGRET
+adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE, datecol = 'date'){
+  # TODO:  reorder site data args to make fully optyional
 
     get_MonthSeq <- function(dates){
         ## dates <- Sample_file$Date
@@ -522,13 +524,14 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         return(eList)
     }
 
-  ms_chem <- chem_df %>%
-    mutate(site_code = 'none',
+    ms_chem <- chem_df %>%
+      mutate(site_code = 'none',
+        # TODO: variable handling
            var = 'IS_NO3',
            ms_status = 0,
            ms_interp = 0) %>%
       rename(val = con,
-             datetime = date)
+             datetime = all_of(datecol))
 
     ms_q <- q_df %>%
       mutate(site_code = 'none',
@@ -536,8 +539,9 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
              ms_status = 0,
              ms_interp = 0) %>%
       rename(val = q_lps,
-             datetime = date)
+             datetime = all_of(datecol))
 
+  # TODO: absolutely replace this cheat
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,
                         latitude = lat,

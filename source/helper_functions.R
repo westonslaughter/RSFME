@@ -66,6 +66,9 @@ dt_to_wy_quarter <- function(datetime) {
 
  warn_sum <- function(x) {
    if(TRUE %in% is.na(x)) {
+     # remove Infs too?
+     ## x <- x[!is.inf(x)]
+
      xsum <- sum(x, na.rm = TRUE)
      # length of record, and NAs in record
      n_x <- length(x)

@@ -147,7 +147,8 @@ for(i in 1:length(site_files)){
           q_df = q_df,
           ws_size = area,
           lat = lat,
-          long = long)
+          long = long,
+          datecol = 'datetime')
 
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
