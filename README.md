@@ -1,11 +1,13 @@
 # flux_estimation_methods_evaluation
 
+this repo is undergoing restructuring
+
 ## purpose
 The purpose of this repo is to develop and maintain tools to evaluate how to best calculate riverine solute fluxes. 
 
 ## structure
 
-### master script
+### main script
 The master script is written to coordinate between all subscripts and data sources.
 
 ### data 
