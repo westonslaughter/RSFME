@@ -1,5 +1,0 @@
-var,usgs_parm_cd,usgs_def,units
-nitrate_nitrite_mgl,99133,"Nitrate plus nitrite, water, in situ, milligrams per liter as nitrogen",mg/l as N
-nitrate_umol,99136,"Nitrate, water, in situ, micromoles per liter",umol/l
-nitrate_mgl,99137,"Nitrate, water, in situ, milligrams per liter as nitrogen",mg/l as N
-spcond_uscm,00095,"Specific conductance, water, unfiltered, microsiemens per centimeter at 25 degrees Celsius",us/cm

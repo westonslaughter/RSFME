@@ -1,0 +1,383 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+library(tidyverse)
+library(feather)
+library(glue)
+library(ggthemes)
+library(png)
+library(here)
+library(mapview)
+library(sf)
+library(viridis)
+library(kableExtra)
+library(RColorBrewer)
+library(gridExtra)
+library(cowplot)
+
+```
+
+#Read in all computed data
+```{r}
+read_add_site <- function(flux_f){
+    
+    site_code <- str_split_fixed(flux_f, '/', n = Inf)[,9]
+
+    site_code <- str_split_fixed(site_code, '[.]', n = Inf)[,1]
+    fluxes <- read_feather(flux_f) 
+    fluxes <- fluxes %>%
+        mutate(wy = as.factor(wy),
+               flux = as.numeric(flux),
+               method = as.character(method),
+               site_code = as.character(!!site_code),
+               thin = as.character(thin))
+    return(fluxes)
+}
+
+flux_files <- list.files(here('streamlined/out_ms/'), full.names = TRUE, recursive = T)
+
+fluxes <- map_dfr(flux_files, read_add_site) %>%
+    na.omit() #only take complete years
+#view(fluxes)
+```
+
+
+#calculate percent difference from 'truth' 
+```{r}
+truth <- filter(fluxes, method == 'true') %>%
+    rename(real = flux) %>%
+    select(wy, site_code, real)
+
+coarse <- filter(fluxes, method != 'true')
+
+comp <- left_join(coarse, truth, by = c('wy','site_code')) %>%
+    mutate(dif = (real-flux)) %>%
+    mutate(percent_dif = (dif/((real+flux)/2))*100) %>%
+    na.omit() # if sites are incomplete when read in this gets rid of them
+
+```
+
+#Get metadata and join it in
+```{r}
+comp_meta <- read_csv("streamlined/data/site/ms_site_info.csv") %>%
+    right_join(., comp, by = "site_code")
+
+n_site_years <- comp %>%
+    select(site_code, wy) %>%
+    unique() %>%
+    nrow()
+```
+
+#Map sites! Mapview not working for no reason.
+```{r}
+us_base <- map_data('state')
+
+map_points <- comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily',
+           X >19) %>%
+    group_by(site_code) %>%
+    slice(1) %>%
+    select(-thin, -method) %>%
+    mutate(alpha = rbi^2)
+
+n_sites <- nrow(map_points)
+
+site_map <- ggplot()+
+    geom_polygon(data = us_base, aes(x=long, y=lat, group = group),
+                 color = 'black', fill = 'white')+
+    geom_point(data = map_points, aes(x = Y, y = X, fill = rbi),
+               size = 4, color = 'black', pch = 21)+
+    labs(caption = paste0(n_sites, ' total sites'))+
+    theme_few()+
+    theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        plot.background = element_rect(fill = "black"),
+        panel.background = element_rect(fill = "black",
+                                colour = "black",
+                                size = 0.5, linetype = "solid"))+
+    #scale_fill_binned(type = 'viridis', breaks = c(0, .1, .5, .8, 1))
+    scale_fill_steps2(low = "yellow", mid = "orange", high = "red", midpoint = .02)
+    #scale_fill_viridis(option = 'magma',
+                        #direction = -1) 
+
+ggsave(site_map, filename = 'streamlined/plots/site_map_ms.png', width = 6, height = 3)
+
+
+pal <-  colorRampPalette(brewer.pal(5, "Reds"))
+#pal <- colorRampPalette(c("yellow", 'orange', "red"),
+#                                space = "rgb")
+#mapviewOptions(basemaps = 'Thunderforest.TrasnportDark')
+mapviewOptions(basemaps = 'ESRI.WorldImagery')
+
+map <- comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily') %>%
+    select(-thin, -method) %>%
+    mutate(alpha = RBI^2) %>%
+    st_as_sf(coords = c('long', 'lat'),
+             crs = 4326) %>%
+    #st_jitter(factor = 0.05) %>%
+    mapview(zcol = 'RBI',
+            col.regions = pal, 
+            at = c(0, 0.25, .5, .75, 1),
+            layer.name = 'RBI',
+            alpha = 'alpha',
+            map.types = mapviewGetOption("basemaps"))
+map
+
+mapview::mapshot(
+  map,
+  url = NULL,
+  file = 'streamlined/plots/map.png',
+  remove_controls = c("zoomControl", "layersControl", "homeButton", "scaleBar",
+    "drawToolbar", "easyButton"))
+
+   
+```
+
+#What ecoregions are represented?
+```{r}
+length(unique(comp_meta$NA_L2NAME))
+ecoregion_table <- comp_meta %>%
+    select(wy, site_code, NA_L2NAME,
+           RBI, ws_area_ha) %>%
+    unique() %>%
+    group_by(NA_L2NAME) %>%
+    tally() %>%
+    arrange(-n) %>%
+    rename(Ecoregion = NA_L2NAME,
+           `Site Years` = n) %>%
+    kbl() %>%
+    kable_paper(full_width = F)
+```
+
+# Site year by site
+```{r}
+site_year_hist <- comp_meta %>%
+    filter(method == 'pw',
+           thin == 'daily') %>%
+    select(wy, site_code) %>%
+    group_by(site_code) %>%
+    tally() %>%
+    ggplot(., aes(x = n))+
+        geom_histogram(binwidth = 1, color = 'black')+
+    scale_x_continuous(breaks = c (2, 4, 6, 8))+
+    scale_y_continuous(breaks = c (2, 4, 6, 8, 10))+
+    theme_few()+
+    labs(x = 'Site Years by Site',
+         y = 'Count',
+         title = 'Distribution of Site Years')
+site_year_hist
+ggsave(site_year_hist, filename = 'streamlined/plots/site_year_hist.png')
+```
+
+#Make a nice boxplot by thinning interval and method
+```{r}
+#
+comp$thin <- factor(comp$thin, levels=c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly'))
+comp$method <- factor(comp$method, levels = c('pw', 'beale', 'rating', 'composite'))
+
+#
+method_labs <- c('Period-Weighted', 'Beale Ratio', 'Regression', 'Composite')
+names(method_labs) <-  c('pw', 'beale', 'rating', 'composite')
+
+#
+n_all <- ggplot(comp, aes(x = thin, y = percent_dif)) + 
+    geom_rect(color = '#FFD685',
+              fill = '#FFD685',
+              alpha = .1,
+              aes(ymax = 20, ymin = 10, 
+                  xmin = -Inf, xmax = Inf))+
+    geom_rect(color = '#7AAC5D',
+              fill = '#7AAC5D',
+              alpha = .1,
+              aes(ymax = 10, ymin = -10, 
+                  xmin = -Inf, xmax = Inf))+
+    geom_rect(color = '#FFD685',
+              fill = '#FFD685',
+              alpha = .1,
+              aes(ymax = -10, ymin = -20, 
+                  xmin = -Inf, xmax = Inf))+
+    facet_wrap(~method, 
+               ncol  = 2,
+               labeller = labeller(method = method_labs)) +
+     geom_boxplot(alpha=.5) +
+    theme_few() +
+    theme(axis.text = element_text(size = 15),
+          axis.title = element_text(size = 20),
+          strip.text.x = element_text(size = 20),
+          plot.caption = element_text(size = 15))+
+    labs(x = 'Thinning Interval', 
+         y = '% Difffernce from True Nitrate Flux',
+         caption = paste0(n_site_years, ' total site years'))
+n_all
+ggsave(plot = n_all, filename = 'streamlined/plots/overview_boxplot_ms.png', height = 6, width = 10)
+```
+
+#Make a nice plot of how watershed area tracks with percent difference across quarterly data
+```{r}
+ggplot(filter(comp_meta, thin == 'quarterly'), 
+       aes(x = ws_area_ha/100, y = percent_dif))+
+    geom_point()+
+    scale_x_log10()+
+    facet_wrap(~method,
+               labeller = labeller(method = method_labs))+
+    theme_few()+
+    labs(x = 'Watershed Area (square km, log)', 
+         y = '% Difffernce from True Nitrate Flux',
+         caption = paste0(n_site_years, ' total site years'))
+```
+
+#Make a nice plot of how RBI tracks with percent difference across biweekly data
+```{r}
+#cor(comp_meta$ws_area_ha, comp_meta$RBI)
+#cor(comp_meta$RBI, comp_meta$percent_dif)
+ggplot(filter(comp_meta, thin == 'quarterly'), 
+       aes(x = RBI, y = abs(percent_dif)))+
+    geom_point()+
+    scale_x_log10()+
+    facet_wrap(~method,
+               labeller = labeller(method = method_labs))+
+    theme_few()+
+    labs(x = 'Flashiness (RBI)', 
+         y = '% Difffernce from True Flux (absolute)',
+         caption = paste0(n_site_years, ' total site years'))
+```
+
+# Make bespoke coarsening illustration. Note that this plot will only work with by loading 'coarse_illustration.RData' first. Coarse data is the 
+```{r}
+coarse_data <- rbind(
+    mutate(thinned_daily_c, thin = 'daily'),
+    mutate(thinned_weekly_c, thin = 'weekly'),
+    mutate(thinned_biweekly_c, thin = 'biweekly'),
+    mutate(thinned_monthly_c, thin = 'monthly'),
+    mutate(thinned_quarterly_c, thin = 'quarterly'))
+prep_data_q
+
+coarse_data$thin <- factor(coarse_data$thin, levels=c('daily', 'weekly', 'biweekly', 'monthly', 'quarterly'))
+
+#
+title_size <- 15
+lab_size <- 10
+    
+p1 <- ggplot(prep_data_q, aes(x =date, y = q_lps),)+
+    geom_line(color = 'blue')+
+    scale_y_log10()+
+    theme_few()+
+    theme(axis.title.x = element_blank(),
+          plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.y = element_text(size = lab_size),
+          axis.text.x = element_blank())+
+    labs(title = 'Flow',
+         y = 'Lps')
+p1
+
+p2 <- ggplot(thinned_daily_c, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    theme_few()+
+    scale_y_continuous(limits = c(0,20))+
+    theme(axis.title.x = element_blank(),
+          plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.y = element_text(size = lab_size),
+          axis.text.x = element_blank()) +
+    labs(title = 'Daily',
+         y = '')
+p2
+
+p3 <- ggplot(thinned_weekly_c, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    theme_few()+
+    scale_y_continuous(limits = c(0,20))+
+    theme(axis.title.x = element_blank(),
+          axis.text.y = element_text(size = lab_size),
+          plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.x = element_blank()) +
+    labs(title = 'Weekly',
+         y = '')
+p3
+
+p4 <- ggplot(thinned_biweekly_c, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    theme_few()+
+    scale_y_continuous(limits = c(0,20))+
+    theme(axis.title.x = element_blank(),
+          axis.text.y = element_text(size = lab_size),
+          plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.x = element_blank()) +
+    labs(title = 'Biweekly',
+         y = 'mg/L')
+p4
+
+p5 <- ggplot(thinned_monthly_c, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    theme_few()+
+    scale_y_continuous(limits = c(0,20))+
+    theme(axis.title.x = element_blank(),
+          axis.text.y = element_text(size = lab_size),
+          plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.x = element_blank()) +
+    labs(title = 'Monthly',
+         y = '')
+p5
+
+p6 <- ggplot(thinned_quarterly_c, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    theme_few()+
+    scale_y_continuous(limits = c(0,20))+
+    theme(plot.title = element_text(size = title_size,hjust = 0.5),
+          axis.text.y = element_text(size = lab_size)) +
+    labs(title = 'Quarterly',
+         y = '',
+         x = 'Date')
+p6
+
+allplotslist <- align_plots(p1,p2, p3, p4, p5, p6, align = 'hv')
+
+p_all <- grid.arrange(allplotslist[[1]], allplotslist[[2]], allplotslist[[3]],
+             allplotslist[[4]], allplotslist[[5]], allplotslist[[6]], 
+             ncol = 1, padding = unit(00))
+
+ggsave(p_all, filename = 'streamlined/plots/coarse_illustration.png', width = 10, height = 8)
+
+####J ###
+
+p1 <- ggplot(prep_data_q, aes(x =date, y = q_lps),)+
+    geom_line(color = 'blue')+
+    scale_y_log10()+
+    theme_few()
+p1
+##devtools::install_github('bbc/bbplot')
+p2 <- ggplot(coarse_data, aes(x = date, y = con))+
+    geom_line(color = 'darkgreen')+
+    geom_point(color = 'darkgreen')+
+    facet_wrap(~thin, ncol = 1)+
+    bbc_style() 
+p2
+
+p3 <- ggplot()+
+    geom_line(data=prep_data_q, aes(x =date, y = q_lps), color = 'blue')+
+  ## scale_y_log10()
+    theme_few()
+
+p4 <- p3 + geom_line(data=coarse_data, aes(x = date, y = con/.02),color = 'darkgreen')+
+    geom_point(data=coarse_data, aes(x = date, y = con/.02),color = 'darkgreen')+
+    facet_wrap(~thin, ncol = 1) +
+      scale_y_continuous(
+                         sec.axis = sec_axis(~ . *.02))
+    theme_few()
+p4
+```
+
