@@ -1,5 +1,7 @@
 
 estDailyFromSurfaces <- function(eList, localsurfaces = NA, localDaily = NA) {
+  ## localsurfaces = NA
+  ## localDaily = NA
 
   if(!is.egret(eList)){
     stop("Please check eList argument")
@@ -8,6 +10,7 @@ estDailyFromSurfaces <- function(eList, localsurfaces = NA, localDaily = NA) {
   print('estDailyFromSurfaces')
 
   localDaily <- getSurfaceEstimates(eList, localsurfaces=localsurfaces, localDaily = localDaily)
+
   # Calculate "flow-normalized" concentration and flux:
   allLogQsByDayOfYear <- bin_Qs(localDaily)
 
@@ -66,7 +69,16 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
   # Using the above data structure as a "look-up" table, list all LogQ values that occured on every
   # day of the entire daily record. When "unlisted" into a vector, these will become the "x" values
   # for the interpolation.
-  allLogQsReplicated <- allLogQsByDayOfYear[index(localDaily$Day)]
+  allLogQsReplicated <- allLogQsByDayOfYear[as.character(localDaily$Day)]
+
+  ## for(i in localDaily$Day){
+  ##   lookup <- allLogQsByDayOfYear[i]
+
+  ##   if(is.na(names(lookup))) {
+  ##     print(i)
+  ##     print(lookup)
+  ##   }
+  ## }
 
   # Replicate the decimal year field for each day of the record to correspond to all the LogQ
   # values listed for that day. These are the "y" values for the interpolation.
@@ -76,6 +88,7 @@ getConcFluxFromSurface <- function(eList, allLogQsByDayOfYear, localDaily, local
   allConcReplicated <- fields::interp.surface( obj=list(x=LogQ,y=Year,z=localsurfaces[,,3]),
                                        loc=data.frame(	unlist(x=allLogQsReplicated),
                                                        y=allDatesReplicated))
+
   allFluxReplicated <- allConcReplicated * exp(as.numeric(unlist(allLogQsReplicated))) * 86.4
 
   return(list(allFluxReplicated=allFluxReplicated,
@@ -124,7 +137,7 @@ getSurfaceEstimates <- function(eList, localsurfaces=NA, localDaily = NA){
 bin_Qs <- function(localDaily){
 
   print('binQs')
-  allLogQsByDayOfYear <- split(localDaily$LogQ, index(localDaily$Day))
+  allLogQsByDayOfYear <- split(localDaily$LogQ, localDaily$Day)
 
   # account for leap day, day of year '60'
   ## allLogQsByDayOfYear[['59']] <- c(unlist(allLogQsByDayOfYear['59']),   # Bob's convention
@@ -170,13 +183,10 @@ modelEstimation<-function(eList,
                          minNumObs = minNumObs, minNumUncen = minNumUncen, edgeAdjust = edgeAdjust,
                          verbose = verbose, run.parallel = run.parallel)
 
-  print('__ surface')
   eList$surfaces <- surfaces1
 
   Daily1 <- estDailyFromSurfaces(eList)
 
-  print('__ daily')
-  print(nrow(Daily1))
   eList$Daily <- Daily1
 
   checkSurfaceSpan(eList)
@@ -252,6 +262,7 @@ estCrossVal<-function(DecLow,DecHigh, Sample, windowY = 7, windowQ = 2,
   SE<-rep(0,numObs)
   ConcHat<-rep(0,numObs)
   iCounter<-seq(1,numObs)
+
   if(verbose) cat("\n estCrossVal % complete:\n")
 
   colToKeep <- c("ConcLow","ConcHigh","Uncen","DecYear","SinDY","CosDY","LogQ")
@@ -460,4 +471,120 @@ run_WRTDS <- function(estY, estLQ,
     warningFlag <- 1
   }
   return(list(survReg=survReg, warningFlag=warningFlag))
+}
+
+estSurfaces<-function(eList, surfaceStart=NA, surfaceEnd=NA, localSample=NA,
+                      windowY=7,windowQ=2,windowS=0.5,
+                      minNumObs=100,minNumUncen=50,edgeAdjust=TRUE,
+                      verbose = TRUE, interactive=NULL,
+                      run.parallel = FALSE){
+
+  # this function estimates the 3 surfaces based on the Sample data
+  # one is the estimated log concentration (yHat)
+  # the second is the estimated standard error (SE)
+  # the third is the estimated concentration (ConcHat)
+  # they are mapped as an array that covers the complete space of daily discharge and time
+  # the first index is discharge, layed out in 14 equally spaced levels of log(Q)
+  # the second index is time, layed out as 16 increments of the calendar year, starting January 1.
+  # it returns the data frame called surfaces
+  #
+  if(!is.null(interactive)) {
+    warning("The argument 'interactive' is deprecated. Please use 'verbose' instead")
+    verbose <- interactive
+  }
+  if(!is.egret(eList)){
+    stop("Please check eList argument")
+  }
+  localINFO <- getInfo(eList)
+  localDaily <- getDaily(eList)
+
+  if(all(is.na(localSample))){
+    localSample <- eList$Sample
+  }
+
+  highLow <- decimalHighLow(localSample)
+
+  DecHigh <- highLow[["DecHigh"]]
+  DecLow <- highLow[["DecLow"]]
+
+  surfaceInfo <- surfaceIndex(localDaily)
+  vectorYear <- surfaceInfo[['vectorYear']]
+  vectorLogQ <- surfaceInfo[['vectorLogQ']]
+
+  LogQ <- seq(surfaceInfo[['bottomLogQ']], by=surfaceInfo[['stepLogQ']], length.out=surfaceInfo[['nVectorLogQ']])
+
+  if(is.na(surfaceStart) && is.na(surfaceEnd)){
+
+    nVectorYear<-length(vectorYear)
+    estPtYear<-rep(vectorYear, each=14)
+
+    Year <- seq(surfaceInfo[['bottomYear']], by=surfaceInfo[['stepYear']], length.out=surfaceInfo[['nVectorYear']])
+
+  } else {
+
+    sliceIndex <- which(vectorYear >= decimalDate(as.Date(surfaceStart)) & vectorYear <=
+                          decimalDate(as.Date(surfaceEnd)))
+    Year <- vectorYear[c(sliceIndex[1]-1, sliceIndex, tail(sliceIndex, n = 1)+1)]
+
+    nVectorYear <- length(Year)
+    estPtYear <- rep(Year,each=14)
+
+  }
+
+  estPtLogQ<-rep(vectorLogQ,nVectorYear)
+
+  resultSurvReg<-runSurvReg(estPtYear, estPtLogQ,
+                            DecLow, DecHigh, localSample,
+                            windowY,windowQ,windowS,
+                            minNumObs,minNumUncen,
+                            edgeAdjust=edgeAdjust,
+                            verbose = verbose,run.parallel=run.parallel)
+
+  surfaces<-array(0,dim=c(14,nVectorYear,3))
+
+  for(iQ in 1:14) {
+    for(iY in 1:nVectorYear){
+      k<-(iY-1)*14+iQ
+      surfaces[iQ,iY,]<-resultSurvReg[k,]
+    }
+  }
+
+  attr(surfaces, "surfaceIndex") <- surfaceInfo
+  attr(surfaces, "LogQ") <- LogQ
+  attr(surfaces, "Year") <- Year
+
+  return(surfaces)
+}
+
+surfaceIndex<-function(Daily){
+  # this function contains the same code that comes at the start of
+  # estSurfaces, it just computes the parameters of the grid
+  # used for the surfaces so that they can be stored for future use
+  # the first index is discharge, layed out in 14 equally spaced levels of log(Q)
+  # the second index is time, layed out as 16 increments of the calendar year, starting January 1.
+  #  Note: I don't think this is the smartest way to do this, but I'm not sure what to do here
+  #  I don't like trying to have the same code twice
+  #
+
+  localDaily <- Daily
+
+  bottomLogQ<- min(localDaily$LogQ, na.rm = TRUE) - 0.05
+  topLogQ <- max(localDaily$LogQ, na.rm = TRUE) + 0.05
+  stepLogQ <-(topLogQ-bottomLogQ)/13
+  vectorLogQ <- seq(bottomLogQ,topLogQ,stepLogQ)
+  stepYear<-1/16
+  bottomYear<-floor(min(localDaily$DecYear, na.rm = TRUE))
+  topYear<-ceiling(max(localDaily$DecYear, na.rm = TRUE))
+  vectorYear<-seq(bottomYear,topYear,stepYear)
+  nVectorYear<-length(vectorYear)
+
+  surfaceIndexParameters<-list(bottomLogQ=bottomLogQ,
+                            stepLogQ=stepLogQ,
+                            nVectorLogQ=14,
+                            bottomYear=bottomYear,
+                            stepYear=stepYear,
+                            nVectorYear=nVectorYear,
+                            vectorYear=vectorYear,
+                            vectorLogQ=vectorLogQ)
+  return(surfaceIndexParameters)
 }

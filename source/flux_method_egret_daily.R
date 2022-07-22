@@ -1,7 +1,7 @@
 adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE){
   
     get_MonthSeq <- function(dates){
-        
+        ## dates <- Sample_file$Date
         years <- lubridate::year(dates)-1850
         
         MonthSeq <- years*12
@@ -16,15 +16,13 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         
         dateTime <- as.POSIXlt(rawData)
         year <- dateTime$year + 1900
-firsthalf
+
         startYear <- as.POSIXct(paste0(year,"-01-01 00:00"))
         endYear <- as.POSIXct(paste0(year+1,"-01-01 00:00"))
         
         DecYear <- year + as.numeric(difftime(dateTime, startYear, units = "secs"))/as.numeric(difftime(endYear, startYear, units = "secs"))
         return(DecYear)
     }
-
-
 
     wyday <- function(dates, wy_type = 'usgs') {
         # get earliest and latest date from series
@@ -68,6 +66,37 @@ firsthalf
       return(ydec)
     }
 
+
+    enlightened_yday <- function(dates, wy_type = 'usgs') {
+        # get earliest and latest date from series
+        start_date <- min(dates)
+        end_date <- max(dates)
+
+        # get the normal year, and make the start of WY date from that year
+        wy_first <- year(start_date)
+        wy_start <- paste0(wy_first, '-10-01')
+        wy_end <- paste0(wy_first+1, '-09-30')
+
+        # unenlightened yday of date vector
+        wy_firsthalf <- yday(dates[month(dates) %in% c(10, 11, 12)])
+        wy_secondhalf <- yday(dates[!month(dates) %in% c(10, 11, 12)])
+
+        # if first half of WY is a leap year,
+        if(366 %in% wy_firsthalf) {
+          print('first half of WY is leap year, adjusting')
+          wy_firsthalf = wy_firsthalf - 1
+        } else if(366 %in% wy_secondhalf) {
+          print('second half of WY is leap year, no action')
+        } else {
+          print('neither side of water year is a leap year')
+        }
+
+        # adjust yday from start of gregorian year to (usgs) WY year
+
+        wy_ydays <- c(wy_firsthalf, wy_secondhalf)
+
+      return(wy_ydays)
+    }
 
     get_start_end <- function(d){
         start_date <- min(d$datetime)
@@ -206,8 +235,8 @@ firsthalf
                               ConcAve = stream_chemistry$val,
                               Julian = as.numeric(julian(lubridate::ymd(stream_chemistry$datetime),origin=as.Date("1850-01-01"))),
                               Month = lubridate::month(stream_chemistry$datetime),
-                              Day = wyday(stream_chemistry$datetime),
-                              DecYear = decimalDateWY(stream_chemistry$datetime),
+                              Day = enlightened_yday(stream_chemistry$datetime),
+                              DecYear = decimalDate(stream_chemistry$datetime),
                               MonthSeq = get_MonthSeq(stream_chemistry$datetime)) %>%
             mutate(SinDY = sin(2*pi*DecYear),
                    CosDY = cos(2*pi*DecYear))  %>%
@@ -228,8 +257,8 @@ firsthalf
                              Q = discharge_daily$val/1000,
                              Julian = as.numeric(julian(lubridate::ymd(discharge_daily$datetime),origin=as.Date("1850-01-01"))),
                              Month = lubridate::month(discharge_daily$datetime),
-                             Day = wyday(discharge_daily$datetime),
-                             DecYear = decimalDateWY(discharge_daily$datetime),
+                             Day = enlightened_yday(discharge_daily$datetime),
+                             DecYear = decimalDate(discharge_daily$datetime),
                              MonthSeq = get_MonthSeq(discharge_daily$datetime),
                              Qualifier = discharge_daily$ms_status)
         
@@ -243,12 +272,14 @@ firsthalf
             
             Daily_file <- Daily_file %>%
                 mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
+          # TODO: record zero flow days, and set flux for those days to zero
             
         }
         
         Daily_file <- Daily_file %>%
-            mutate(Q7 = zoo::rollmean(Q, 7, fill = NA, align = 'right'),
-                   Q30 = zoo::rollmean(Q, 30, fill = NA, align = 'right'),
+            # 'extend' rollmean
+            mutate(Q7 = zoo::rollmean(Q, 7, fill = 'extend', align = 'right'),
+                   Q30 = zoo::rollmean(Q, 30, fill = 'extend', align = 'right'),
                    LogQ = log(Q)) 
         
         Daily_file <- tibble::rowid_to_column(Daily_file, 'i') %>%
@@ -270,7 +301,8 @@ firsthalf
             filter(site_code == !!site_code,
                    site_type == 'stream_gauge') %>%
             pull('ws_area_ha')
-        # ws area cange
+
+        # ws area change?
         site_ws_area <- site_ws_area / 100
         
         new_point <- sf::st_sfc(sf::st_point(c(site_lon, site_lat)), crs = 4326) %>%
@@ -411,3 +443,70 @@ firsthalf
 ## EGRET::plotConcTime(egret_results)
 ## EGRET::plotFluxQ(egret_results)
 ## EGRET::plotConcPred(egret_results)
+
+# re-run defnitions cheatsheet
+
+## # mas adapt egret
+## chem_df = chem_df
+## q_df = prep_data_q
+## ws_size = area
+## lat = lat
+## long = long
+
+## # pre egret
+##   ms_chem <- chem_df %>%
+##     mutate(site_code = 'none',
+##            var = 'IS_NO3',
+##            ms_status = 0,
+##            ms_interp = 0) %>%
+##       rename(val = con,
+##              datetime = date)
+
+##     ms_q <- q_df %>%
+##       mutate(site_code = 'none',
+##              var = 'IS_discharge',
+##              ms_status = 0,
+##              ms_interp = 0) %>%
+##       rename(val = q_lps,
+##              datetime = date)
+
+## site_data <- tibble(site_code = 'none',
+##   ws_area_ha = ws_size,
+##   latitude = lat,
+##   longitude = long,
+##   site_type = 'stream_gauge')
+
+## stream_chemistry = ms_chem
+## discharge = ms_q
+## prep_data = TRUE
+## site_data = site_data
+## kalman = FALSE
+## run_egret = TRUE
+
+## prep_data = TRUE
+## run_egret = TRUE
+## kalman = FALSE
+## quiet = FALSE
+## site_data = NULL
+
+## minNumObs = 2
+## minNumUncen = 2
+## verbose = TRUE
+
+## windowY = 7
+## windowQ = 2
+## windowS = 0.5
+## edgeAdjust = TRUE
+## verbose = TRUE
+## run.parallel = FALSE
+
+
+
+
+
+
+
+# surfaces
+## surfaceStart=NA
+## surfaceEnd=NA
+## localSample=NA

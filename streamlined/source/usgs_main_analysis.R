@@ -90,7 +90,7 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
     }
 }
 
-## i <- 32
+## i <- 7
 
 for(i in 1:nrow(good_list)){
 # select site #####
@@ -151,7 +151,7 @@ raw_data_full_pre <- rbind(daily_data_n, raw_data_q) %>%
 
 
 # Loop through good years ####
-## t <- 1
+## t <- 3
 # needs DAILY q and any chem
 for(t in 1:length(good_years)){
 target_year <- as.numeric(as.character(good_years[t]))
@@ -188,21 +188,35 @@ rating_filled_df <- raw_data_full %>%
     mutate(res = con_reg-con,
            res = imputeTS::na_interpolation(res),
            con_com = con_reg-res)
+
 rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
+
+warn_sum <- function(x) {
+  if(TRUE %in% is.na(x)) {
+    xsum <- sum(x, na.rm = TRUE)
+
+    # length of record, and NAs in record
+    n_x <- length(x)
+    n_na <- length(x[is.na(x)])
+
+    writeLines(paste('NAs found in flux record, ignoring during SUM. \n count NA:',
+                n_na,
+                '\n percent NA:', (n_na/n_x) * 100))
+  } else {
+    xsum <- sum(x)
+  }
+  return(xsum)
+}
 
 # calculate true annual flux
 true_flux <- rating_filled_df %>%
   mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
     group_by(wy) %>%
-    summarize(flux = sum(flux)) %>%
+    # NOTE: some sites throw NAs in record, ask NG if cool to replace?
+    summarize(flux = warn_sum(flux)) %>%
     mutate(site_code = site_no,
            method = 'true',
            thin = 'none')
-
-
-true_flux_d <- rating_filled_df %>%
-  mutate(flux = con_com*q_lps*86400*(1/area)*1e-6)
-## plot(true_flux_d$date, true_flux_d$flux)
 
 ###### prep q data#####
 prep_data_q <- raw_data_q %>%
@@ -314,7 +328,7 @@ flux_from_daily_rating <- calculate_rating(chem_df, prep_data_q)
 
 ###### calculate wrtds ######
 library(EGRET)
-source('streamlined/source/egret_overwrites.R')
+## source('streamlined/source/egret_overwrites.R')
 
 calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
 
@@ -322,16 +336,10 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
     expr = {
       egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
 
+      # still looking for reason why wrtds is 1K higher than others
       flux_from_egret <- egret_results$Daily$FluxDay %>%
-            # still looking for reason why wrtds is 1K higher than others
-        sum(.)/(area)
+        warn_sum(.)/(area)
 
-      if(is.na(flux_from_egret)) {
-        print('ERROR: flux failed to sum, ignoring NAs')
-        ed.flux <- egret_results$Daily$FluxDay
-        flux_from_egret <- ed.flux[!is.infinite(ed.flux)] %>%
-          sum(., na.rm = TRUE)/(area)
-      }
     },
     error = function(e) {
       print('ERROR, EGRET FAILED')
@@ -341,10 +349,19 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long) {
 
 flux_from_daily_wrtds <- calculate_wrtds(
   chem_df = chem_df,
-                                 q_df = prep_data_q,
-                                 ws_size = area,
-                                 lat = lat,
-                                 long = long)
+  q_df = prep_data_q,
+  ws_size = area,
+  lat = lat,
+  long = long)
+
+# plot TS of true flux and wrtds
+## true_flux_d <- rating_filled_df %>%
+##   mutate(flux = con_com*q_lps*86400*(1/area)*1e-6)
+
+## egret_flux <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long)
+
+## plot(true_flux_d$datetime, true_flux_d$flux)
+## plot(egret_flux$Daily$Date, egret_flux$Daily$FluxDay)
 
 ###### calculate composite ######
 generate_residual_corrected_con <- function(chem_df, q_df){
@@ -410,6 +427,7 @@ daily_out <- tibble(wy = flux_from_daily_comp$wy[1],
 
 ## WEEKLY ######
 chem_df <- thinned_weekly_c
+
 ###### calculate period weighted#########
 flux_from_weekly_pw <- calculate_pw(chem_df, prep_data_q)
 
@@ -445,6 +463,7 @@ weekly_out <- tibble(wy = flux_from_weekly_comp$wy[1],
 
 ## BIWEEKLY ######
 chem_df <- thinned_biweekly_c
+
 ###### calculate period weighted#########
 flux_from_biweekly_pw <- calculate_pw(chem_df, prep_data_q)
 
@@ -479,7 +498,8 @@ biweekly_out <- tibble(wy = flux_from_biweekly_comp$wy[1],
                      thin = 'biweekly')
 
 ## MONTHLY ######
-chem_df <- thinned_weekly_c
+chem_df <- thinned_monthly_c
+
 ###### calculate period weighted#########
 flux_from_monthly_pw <- calculate_pw(chem_df, prep_data_q)
 
