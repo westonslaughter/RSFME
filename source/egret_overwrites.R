@@ -260,10 +260,7 @@ estCrossVal<-function(DecLow,DecHigh, Sample, windowY = 7, windowQ = 2,
 
     SampleMinusOne<-SampleCV[SampleCV$iCounter!=i,]
 
-    ## print('BLAH!')
-    ## print(minNumUncen)
-
-    result<-runSurvReg(estPtYear = SampleCrossV$DecYear[i],
+    result <- runSurvReg(estPtYear = SampleCrossV$DecYear[i],
                        estPtLQ = SampleCrossV$LogQ[i],
                        DecLow = DecLow,
                        DecHigh = DecHigh,
@@ -312,10 +309,17 @@ runSurvReg<-function(estPtYear,estPtLQ,DecLow,DecHigh,Sample,
 
   warningFlag <- 0
   n <- NULL
+
   if(run.parallel){
     `%dopar%` <- foreach::`%dopar%`
     wrtds_return_list <- foreach::foreach(n = 1:numEstPt, .packages=c('EGRET')) %dopar% {
-                      wrtds_returns <- run_WRTDS(estY = estPtYear[n], estLQ = estPtLQ[n],
+                      wrtd27] -10.481699  -9.419595  -8.357491  -7.295387  -6.233283  -5.171179
+[433]  -4.109075  -3.046971 -16.854322 -15.792218 -14.730115 -13.668011
+[439] -12.605907 -11.543803 -10.481699  -9.419595  -8.357491  -7.295387
+[445]  -6.233283  -5.171179  -4.109075  -3.046971 -16.854322 -15.792218
+[451] -14.730115 -13.668011 -12.605907 -11.543803 -10.481699  -9.419595
+[457]  -8.357491  -7.295387  -6.233283  -5.171179  -4.109075  -3.046971
+> s_returns <- run_WRTDS(estY = estPtYear[n], estLQ = estPtLQ[n],
                                                  localSample =localSample,DecLow = DecLow,DecHigh = DecHigh,
                                                  minNumObs = minNumObs,minNumUncen = minNumUncen,
                                                  windowY = windowY, windowQ = windowQ, windowS = windowS,
@@ -330,8 +334,14 @@ runSurvReg<-function(estPtYear,estPtLQ,DecLow,DecHigh,Sample,
     if (verbose) cat("Survival regression (% complete):\n")
 
     for (i in 1:numEstPt) {
-      wrtds_return <- run_WRTDS(estY = estPtYear[i], estLQ = estPtLQ[i],
-                                localSample =localSample,DecLow = DecLow,DecHigh = DecHigh,
+      print(i)
+      print('printing estPtLQ[i]')
+      print(estPtLQ[i])
+
+      wrtds_return <- run_WRTDS(estY = estPtYear[i],
+                                estLQ = estPtLQ[i],
+                                localSample = localSample,
+                                DecLow = DecLow,DecHigh = DecHigh,
                                 minNumObs = minNumObs,minNumUncen = minNumUncen,
                                 windowY = windowY, windowQ = windowQ, windowS = windowS,
                                 edgeAdjust = edgeAdjust)

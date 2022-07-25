@@ -1,3 +1,16 @@
+library(tidyverse)
+library(feather)
+library(here)
+library(glue)
+library(lubridate)
+library(EGRET)
+library(macrosheds)
+
+source('source/helper_functions.R')
+source('source/egret_overwrites.R')
+source('source/flux_methods.R')
+source('source/usgs_helpers.R')
+
 data_dir <- 'data/ms/hbef/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv('data/site/ms_site_info.csv')
@@ -9,7 +22,8 @@ out_frame <- tibble(wy = as.integer(),
                     val = as.numeric(), 
                     method = as.character(),
                     ms_reccomended = as.integer())
-## i = 1
+
+## i = 2
 # Loop through sites #####
 for(i in 1:length(site_files)){
     
@@ -45,6 +59,7 @@ for(i in 1:length(site_files)){
         pull(var)
 
   ## Loop through solutes at site #####
+  ## j = 1
   for(j in 1:length(solutes)){
     
     #set to target solute
@@ -102,7 +117,7 @@ for(i in 1:length(site_files)){
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
 
-    ## k = 48
+    ## k = 16
     ### Loop through good years #####
     for(k in 1:length(good_years)){
         target_year <- as.numeric(as.character(good_years[k]))
@@ -128,6 +143,7 @@ for(i in 1:length(site_files)){
             group_by(wy) %>%
             summarize(q_lps = mean(q_lps, na.rm = TRUE),
                       con = mean(con, na.rm = TRUE)) %>%
+            # multiply by seconds in a year, and divide my mg to kg conversion (1M)
             mutate(flux = con*q_lps*3.154e+7*(1/area)*1e-6) %>%
             pull(flux)
             
@@ -139,15 +155,17 @@ for(i in 1:length(site_files)){
         flux_annual_beale <- calculate_beale(chem_df, q_df, datecol = 'datetime')
 
         #### calculate rating #####
+
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
-        #### calculate composite ######
+        #### calculate WRTDS ######
         flux_annual_wrtds <- calculate_wrtds(
           chem_df = chem_df,
           q_df = q_df,
           ws_size = area,
           lat = lat,
           long = long,
+          ## datamode = 'ms',
           datecol = 'datetime')
 
         #### calculate composite ######

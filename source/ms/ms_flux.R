@@ -4,12 +4,16 @@ library(devtools)
 library(macrosheds)
 library(here)
 library(RiverLoad)
+library(stringr)
+library(tidyverse)
 
-source('streamlined/source/usgs_helpers.R')
+source('source/usgs_helpers.R')
 source('source/helper_functions.R')
+source('source/flux_methods.R')
+source('source/egret_overwrites.R')
 
 #declare ms core dir
-my_ms_dir <- here('streamlined/data/ms')
+my_ms_dir <- here('data/ms')
 
 # load in a df of MS sites with
 ms <- ms_download_site_data() %>%
@@ -23,8 +27,6 @@ ms_vars <- ms_catalog()
 ms_sites <- ms_vars[grep("^Nitrate", ms_vars$variable_name),]
 
 # calculate the amount of days in ten years
-#ten_yrs_days <- 365 * 10
-
 ms_sites <- ms_sites %>%
     mutate(period = as.numeric(
         difftime(last_record_utc,
@@ -45,13 +47,12 @@ raw_data_q <- ms_load_product(
     warn = TRUE
 )
 
-#acutal_ms_site_ls <- 
-actual_files <- list.files('streamlined/data/ms', full.names = T, recursive = T)
+actual_files <- list.files('data/ms', full.names = T, recursive = T)
 actual_files_ls <- tibble(file = actual_files) %>%
     filter(grepl('stream_chemistry', file),
        !grepl('documentation', file)) %>%
-    mutate(site_file = str_split_fixed(file, '/', n = Inf)[,6],
-           site_code =  str_split_fixed(site_file, '[.]', n = Inf)[,1]) %>%
+  mutate(site_file = str_split(file, '/', simplify = TRUE)[,5],
+         site_code = str_extract(site_file, "[^\\.]*")) %>%
     filter(site_code %in% unique(raw_data_q$site_code)) %>%
     pull(site_code)
 
@@ -61,6 +62,7 @@ s <- actual_files_ls[1]
 ms_dir <- my_ms_dir
 
 for(s in actual_files_ls) {
+  ## s <- actual_files_ls[1]
   # load in site area
   area <- ms[ms$site_code == s,]$ws_area_ha
 
@@ -127,13 +129,13 @@ for(s in actual_files_ls) {
       next
     } else {
     
-    pw_wy <- calculate_pw(chem_df = chem_df, q_df = q_df)
+      pw_wy <- calculate_pw(chem_df = chem_df, q_df = q_df)
     
-    beale_wy <- calculate_beale(chem_df = chem_df, q_df = q_df)
+      beale_wy <- calculate_beale(chem_df = chem_df, q_df = q_df)
     
-    rating_wy <- calculate_rating(chem_df = chem_df, q_df = q_df)
+      rating_wy <- calculate_rating(chem_df = chem_df, q_df = q_df)
     
-    composite_wy <- calculate_composite_from_rating_filled_df(
+      composite_wy <- calculate_composite_from_rating_filled_df(
         generate_residual_corrected_con(chem_df = chem_df, q_df = q_df)
     )
     

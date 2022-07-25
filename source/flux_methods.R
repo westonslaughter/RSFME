@@ -287,6 +287,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
             # Egret can't accept 0s in the column for min val (either hack egret or do this or
             # look for detection limits)
+            # TODO: use DL system to replace min vals, get_hdl()
             min_chem <- stream_chemistry %>%
                 filter(val > 0) %>%
                 pull(val) %>%
@@ -340,6 +341,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             stream_chemistry <- stream_chemistry %>%
                 filter(!datetime %in% samples_to_remove)
         }
+
+      ## if(datamode == 'ms') {
+      ##   stream_chemistry <- stream_chemistry %>%
+      ##     # convert g to kg
+      ##       mutate(val = val / 1000000)
+      ## }
 
         # Set up EGRET Sample file
         Sample_file <- tibble(Name = site_code,
@@ -486,7 +493,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
         eList <- try(modelEstimation(eList,
                                         minNumObs = 2,
-                                        minNumUncen = 2, verbose = TRUE))
+                                     minNumUncen = 2,
+                                     verbose = TRUE))
 
         if(inherits(eList, 'try-error')){
             stop('EGRET failed while running WRTDS. See https://github.com/USGS-R/EGRET for reasons data may not be compatible with the WRTDS model.')
@@ -541,16 +549,18 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
       rename(val = q_lps,
              datetime = all_of(datecol))
 
-  # TODO: absolutely replace this cheat
     site_data <- tibble(site_code = 'none',
                         ws_area_ha = ws_size,
                         latitude = lat,
                         longitude = long,
                         site_type = 'stream_gauge')
 
-    egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem, discharge = ms_q,
-                                        prep_data = TRUE, site_data = site_data,
-                                        kalman = kalman, run_egret = TRUE)
+  egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem,
+                                      discharge = ms_q,
+                                      prep_data = TRUE,
+                                      site_data = site_data,
+                                      kalman = kalman,
+                                      run_egret = TRUE)
 
     return(egret_results)
 }
@@ -567,19 +577,20 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
 ## # mas adapt egret
 ## chem_df = chem_df
-## q_df = prep_data_q
+## ## q_df = prep_data_q
+## q_df = q_df
 ## ws_size = area
 ## lat = lat
 ## long = long
 
-## # pre egret
+## pre egret
 ##   ms_chem <- chem_df %>%
 ##     mutate(site_code = 'none',
 ##            var = 'IS_NO3',
 ##            ms_status = 0,
 ##            ms_interp = 0) %>%
 ##       rename(val = con,
-##              datetime = date)
+##              datetime = all_of(datecol))
 
 ##     ms_q <- q_df %>%
 ##       mutate(site_code = 'none',
@@ -587,7 +598,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 ##              ms_status = 0,
 ##              ms_interp = 0) %>%
 ##       rename(val = q_lps,
-##              datetime = date)
+##              datetime = all_of(datecol))
 
 ## site_data <- tibble(site_code = 'none',
 ##   ws_area_ha = ws_size,
@@ -606,7 +617,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 ## run_egret = TRUE
 ## kalman = FALSE
 ## quiet = FALSE
-## site_data = NULL
 
 ## minNumObs = 2
 ## minNumUncen = 2

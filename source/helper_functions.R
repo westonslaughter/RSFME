@@ -65,15 +65,30 @@ dt_to_wy_quarter <- function(datetime) {
 
 
  warn_sum <- function(x) {
-   if(TRUE %in% is.na(x)) {
-     # remove Infs too?
-     ## x <- x[!is.inf(x)]
+   # length of record
+   n_x <- length(x)
 
-     xsum <- sum(x, na.rm = TRUE)
-     # length of record, and NAs in record
-     n_x <- length(x)
+   if(TRUE %in% is.na(x)) {
+     # number of NAs in record
      n_na <- length(x[is.na(x)])
-     writeLines(paste('NAs found in flux record, ignoring during SUM. \n count NA:',
+
+    if(TRUE %in% is.infinite(x)) {
+      # number of inf values in record
+      n_inf <- length(x[is.infinite(x)])
+
+      # warn user
+      writeLines(paste("WARNING: infinite values found in flux record, ignoring during SUM",
+                       "\n count NA:", n_na,
+                       "\n count Inf:", n_inf))
+
+
+      xsum <- sum(x[!is.infinite(x)], na.rm = TRUE)
+      return(xsum)
+    }
+
+    xsum <- sum(x, na.rm = TRUE)
+
+    writeLines(paste('NAs found in flux record, ignoring during SUM. \n count NA:',
                  n_na,
                  '\n percent NA:', (n_na/n_x) * 100))
    } else {
