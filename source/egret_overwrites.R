@@ -313,13 +313,7 @@ runSurvReg<-function(estPtYear,estPtLQ,DecLow,DecHigh,Sample,
   if(run.parallel){
     `%dopar%` <- foreach::`%dopar%`
     wrtds_return_list <- foreach::foreach(n = 1:numEstPt, .packages=c('EGRET')) %dopar% {
-                      wrtd27] -10.481699  -9.419595  -8.357491  -7.295387  -6.233283  -5.171179
-[433]  -4.109075  -3.046971 -16.854322 -15.792218 -14.730115 -13.668011
-[439] -12.605907 -11.543803 -10.481699  -9.419595  -8.357491  -7.295387
-[445]  -6.233283  -5.171179  -4.109075  -3.046971 -16.854322 -15.792218
-[451] -14.730115 -13.668011 -12.605907 -11.543803 -10.481699  -9.419595
-[457]  -8.357491  -7.295387  -6.233283  -5.171179  -4.109075  -3.046971
-> s_returns <- run_WRTDS(estY = estPtYear[n], estLQ = estPtLQ[n],
+                      wrtds_returns <- run_WRTDS(estY = estPtYear[n], estLQ = estPtLQ[n],
                                                  localSample =localSample,DecLow = DecLow,DecHigh = DecHigh,
                                                  minNumObs = minNumObs,minNumUncen = minNumUncen,
                                                  windowY = windowY, windowQ = windowQ, windowS = windowS,

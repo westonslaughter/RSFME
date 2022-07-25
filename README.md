@@ -1,6 +1,12 @@
 # flux_estimation_methods_evaluation
 
-this repo is undergoing restructuring
+TODO:
+- make single USGS and HBEF annual flux calcs loop
+- run this loop and share / first look at results
+- compare single year HBEF WRTDS results (with errors and bad estimates) to same site/solute annual estimates with 10yr of data given to WRTDS
+- WRTDS results (currently) make sense as-is, need to rigorously document UNITS and ensure that it all maths out to kg/day
+  
+
 
 ## purpose
 The purpose of this repo is to develop and maintain tools to evaluate how to best calculate riverine solute fluxes. 
