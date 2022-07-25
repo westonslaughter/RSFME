@@ -15,7 +15,7 @@ data_dir <- 'data/ms/hbef/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv('data/site/ms_site_info.csv')
 
-
+# df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(), 
                     site_code = as.character(),
                     var = as.character(),
@@ -23,7 +23,6 @@ out_frame <- tibble(wy = as.integer(),
                     method = as.character(),
                     ms_reccomended = as.integer())
 
-## i = 2
 # Loop through sites #####
 for(i in 1:length(site_files)){
     
@@ -42,11 +41,13 @@ for(i in 1:length(site_files)){
         filter(site_code == !!site_code) %>%
         pull(X)
     
+    # read in chemistry data
     raw_data_con <- read_feather(here(glue(data_dir, 'stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0)
-    
+
+    # read in discharge data
     raw_data_q <- read_feather(here(glue(data_dir, 'discharge/', site_code, '.feather')))
-    
+
     # initialize next loop
     solutes <- raw_data_con %>%
         ## switch to only Nitrate for now
@@ -58,18 +59,20 @@ for(i in 1:length(site_files)){
         unique() %>%
         pull(var)
 
+  writeLines(paste("FLUX CALCS:", site_code))
+
   ## Loop through solutes at site #####
   ## j = 1
   for(j in 1:length(solutes)){
-    
+    writeLines(paste("site:", site_code,
+                     "var:", solute))
+
     #set to target solute
     target_solute <- solutes[j]
-    
+
     raw_data_con <- read_feather(here(glue(data_dir, 'stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
-               val > 0)
-    
-    raw_data_con <- raw_data_con %>%
+               val > 0) %>%
         filter(var == target_solute) %>%
         select(datetime, val) %>%
         na.omit()
@@ -94,8 +97,10 @@ for(i in 1:length(site_files)){
     
     q_good_years <- q_check$water_year
     conc_good_years <- conc_check$water_year
-    
+
+    # 'good years' where Q and Chem data both meet min requirements
     good_years <- q_good_years[q_good_years %in% conc_good_years]
+    n_yrs <- length(good_years)
     
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
@@ -120,6 +125,10 @@ for(i in 1:length(site_files)){
     ## k = 16
     ### Loop through good years #####
     for(k in 1:length(good_years)){
+
+      writeLines(paste("site:", site_code,
+                       'year:', good_years[k]))
+
         target_year <- as.numeric(as.character(good_years[k]))
         
         raw_data_target_year <- raw_data_full %>%
@@ -216,11 +225,15 @@ for(i in 1:length(site_files)){
         
         #### congeal fluxes ####
         target_year_out <- tibble(wy = as.character(target_year), 
-                            val = c(flux_annual_average, flux_annual_pw, flux_annual_beale, 
-                                     flux_annual_rating, flux_annual_comp$flux[1]),
+                                  val = c(flux_annual_average,
+                                          flux_annual_pw,
+                                          flux_annual_beale,
+                                          flux_annual_rating,
+                                          flux_annual_wrtds,
+                                          flux_annual_comp$flux[1]),
                             site_code = !!site_code, 
                             var = !!target_solute,
-                            method = c('average', 'pw', 'beale', 'rating', 'composite')) %>%
+                            method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite')) %>%
             mutate(ms_recommended = ifelse(method == !!ideal_method, 1, 0))
         out_frame <- rbind(out_frame, target_year_out)
         
