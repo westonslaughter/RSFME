@@ -328,9 +328,6 @@ runSurvReg<-function(estPtYear,estPtLQ,DecLow,DecHigh,Sample,
     if (verbose) cat("Survival regression (% complete):\n")
 
     for (i in 1:numEstPt) {
-      print(i)
-      print('printing estPtLQ[i]')
-      print(estPtLQ[i])
 
       wrtds_return <- run_WRTDS(estY = estPtYear[i],
                                 estLQ = estPtLQ[i],

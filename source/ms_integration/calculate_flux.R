@@ -22,7 +22,7 @@ out_frame <- tibble(wy = as.integer(),
                     val = as.numeric(), 
                     method = as.character(),
                     ms_reccomended = as.integer())
-
+## i = 2
 # Loop through sites #####
 for(i in 1:length(site_files)){
     
@@ -65,7 +65,7 @@ for(i in 1:length(site_files)){
   ## j = 1
   for(j in 1:length(solutes)){
     writeLines(paste("site:", site_code,
-                     "var:", solute))
+                     "var:", solutes[j]))
 
     #set to target solute
     target_solute <- solutes[j]
@@ -184,7 +184,8 @@ for(i in 1:length(site_files)){
                                                             sitecol = 'site_code')
         
         # calculate annual flux from composite
-        flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
+        flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df,
+                                                                    sitecol = 'site_code')
         
         #### select MS favored ####
         paired_df <- q_df %>%
@@ -248,3 +249,5 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
+
+## w4df <- read_feather('data/ms/hbef/stream_flux/w4.feather')

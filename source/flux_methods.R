@@ -101,12 +101,12 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
         }
 
 # calculate annual flux from composite
-calculate_composite_from_rating_filled_df <- function(rating_filled_df){
+calculate_composite_from_rating_filled_df <- function(rating_filled_df, sitecol = 'site_no'){
         flux_from__comp <- rating_filled_df %>%
             mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
             group_by(wy) %>%
             summarize(flux = sum(flux)) %>%
-            mutate(site_code = site_no)
+            mutate(site_code = all_of(sitecol))
 
         return(flux_from__comp)
         }

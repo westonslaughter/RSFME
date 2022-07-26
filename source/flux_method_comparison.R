@@ -20,7 +20,7 @@ for(ws in hbef_ws) {
     hbef_flux_dfs[[ws]] <- hbef_flux_dfs[[ws]][!ws.outliers,]
 
     # report % of WRTDS measurements removed
-    length(ws.outliers[ws.outliers == TRUE])
+    print(length(ws.outliers[ws.outliers == TRUE]))
 
     # plot remainder
      hbef_flux_plots[[ws]]<- ggplot(hbef_flux_dfs[[ws]], aes(x=wy, y = val)) +
