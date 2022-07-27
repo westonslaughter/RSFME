@@ -93,9 +93,20 @@ for(i in 1:nrow(usgs_n)){ #check for good sites
     }
 }
 
+## write.csv(good_list, 'data/good_sites.csv')
+## write.csv(good_years, 'data/good_years.csv')
+
 # failed WRTDS flux calcs
 ## failed.df <- data.frame(matrix(ncol = 5, nrow= 1))
 ## colnames(failed.df) <- c('site_no', 'year', 'method', 'thinning')
+
+# df to populate with annual flux values by method
+
+out_frame_main <- tibble(wy = as.integer(),
+                    flux = as.numeric(),
+                    site_code = as.character(),
+                    method = as.character(),
+                    thin = as.character())
 
 # loop thru 'good' sites and perform thinnings and flux calcs
 for(i in 1:nrow(good_list)){
@@ -352,7 +363,7 @@ for(i in 1:nrow(good_list)){
                                      flux_from_daily_rating,
                                      flux_from_daily_wrtds,
                                      flux_from_daily_comp$flux[1]),
-                            site_code = flux_from_daily_comp$site_code[1],
+                            site_code = site_no,
                             method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                             thin = 'daily')
 
@@ -390,7 +401,7 @@ for(i in 1:nrow(good_list)){
                                       flux_from_weekly_rating,
                                       flux_from_weekly_wrtds,
                                       flux_from_weekly_comp$flux[1]),
-                            site_code = flux_from_weekly_comp$site_code[1],
+                            site_code = site_no,
                             method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                             thin = 'weekly')
 
@@ -427,7 +438,7 @@ for(i in 1:nrow(good_list)){
                                         flux_from_biweekly_rating,
                                         flux_from_biweekly_wrtds,
                                         flux_from_biweekly_comp$flux[1]),
-                             site_code = flux_from_biweekly_comp$site_code[1],
+                             site_code = site_no,
                              method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                              thin = 'biweekly')
 
@@ -464,7 +475,7 @@ for(i in 1:nrow(good_list)){
                                        flux_from_monthly_rating,
                                        flux_from_monthly_wrtds,
                                        flux_from_monthly_comp$flux[1]),
-                                site_code = flux_from_monthly_comp$site_code[1],
+                                site_code = site_no,
                                 method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                                 thin = 'monthly')
 
@@ -492,7 +503,7 @@ for(i in 1:nrow(good_list)){
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = prep_data_q)
         # calculate annual flux from composite
-        flux_from_quarterly_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
+        flux_from_quarterly_comp <- calculate_composite_from_rating_filled_df(rating_filled_df, site_no = site_no)
 
         ##### congeal quarterly ####
         quarterly_out <- tibble(wy = flux_from_quarterly_comp$wy[1],
@@ -502,12 +513,30 @@ for(i in 1:nrow(good_list)){
                                          ## flux_from_quarterly_wrtds,
                                          NA,
                                          flux_from_quarterly_comp$flux[1]),
-                               site_code = flux_from_quarterly_comp$site_code[1],
+                               site_code = site_no,
                                method = c('pw', 'beale', 'rating', 'wrtds', 'composite'),
                                thin = 'quarterly')
 
         ## congeal results ####
         out_frame <- rbind(true_flux, daily_out, weekly_out, biweekly_out, monthly_out, quarterly_out)
+
+        # all results #
+        out_frame_main <- rbind(out_frame_main, out_frame)
+
+        print('----- head main outframe ------')
+        print(head(out_frame_main))
+        print('NROW:')
+        print(nrow(out_frame_main))
+        print('-------------------------------')
+
+        ## save flux out of loop ####
+        directory <- 'out/'
+        if(!dir.exists(directory)){
+            dir.create(directory, recursive = TRUE)
+                    }
+        file_path <- 'out/usgs_annual_flux.feather'
+
+        write_feather(out_frame_main, file_path)
 
         ## save flux out of loop ####
         directory <- glue('out/{wy}',
@@ -545,5 +574,7 @@ for(i in 1:nrow(good_list)){
                           s = site_no)
 
         write_feather(out_meta, file_path)
+
+
     } # end year loop
 } # end site loop
