@@ -2,3 +2,12 @@
 .Rhistory
 .RData
 .Ruserdata
+
+/streamlined/data/*
+/streamlined/out_ms/*
+/streamlined/out/*
+
+!/data/general
+data/
+streamlined/out/
+vault/

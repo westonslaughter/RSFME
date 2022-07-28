@@ -4,6 +4,8 @@ library(lubridate)
 library(feather)
 library(zoo)
 library(here)
+library(lfstat)
+library(imputeTS)
 
 ### CURRENT TESTING PRIORITY
 # take 15 minute usgs data for a solute and coarsen it to weekly data
@@ -26,6 +28,10 @@ eagle_q <- eagle %>%
     select(date = dateTime, q_cfs = X_00060_00000) %>%
     mutate(q_cfs = na.approx(q_cfs, rule = 2))
 
+eagle_info <- readNWISsite('03353200')
+eagle_lat  <- eagle_info$dec_lat_va
+eagle_long <- eagle_info$dec_long_va
+
 ggplot(eagle_chem, aes(x = date, y = nitrate_mgL))+
     geom_line()
 
@@ -46,6 +52,10 @@ ocon_chem <- ocon %>%
 ocon_q <- ocon %>%
     select(date = dateTime, q_cfs = X_00060_00000) %>%
     mutate(q_cfs = na.approx(q_cfs, rule = 2))
+
+ocon_info <- readNWISsite('03512000')
+ocon_lat  <- ocon_info$dec_lat_va
+ocon_long <- ocon_info$dec_long_va
 
 ggplot(ocon_chem, aes(x = date, y = nitrate_mgL))+
     geom_line()
@@ -70,13 +80,28 @@ q_df <- eagle_q %>%
 
 ws_size = eagle_ws_area_ha
 
+# create weekly data for testing
+chem_df <- ocon_chem %>%
+    mutate(week = floor_date(date, unit = 'week')) %>%
+    group_by(week) %>%
+    arrange(date) %>%
+    filter(row_number()==1) %>%
+    ungroup() %>%
+    select(date, con = nitrate_mgL)%>%
+    mutate(date = floor_date(date, unit = 'days'))
+
+q_df <- ocon_q %>%
+    mutate(q_lps = q_cfs*28.316847) %>%
+    select(date, q_lps)
+
+ws_size = ocon_ws_area_ha
 ###### test completed functions
 # hbef
 source('source/flux_method_hbef_daily.R')
 test_hbef <- estimate_flux_hbef_daily(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
 test_hbef
 
-ggplot(test_hbef, aes(x = date, y = flux_daily_kg_ha))+
+ggplot(test_hbef, aes(x = date, y = flux))+
   geom_point()+
   geom_line()
 
@@ -103,3 +128,33 @@ estimate_flux_bear_hourly(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_are
 
 source('source/flux_method_bear_annual.R')
 estimate_flux_bear_annual(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha)
+
+
+# prep eagle to daily
+
+# initialize output df
+startDate <- min(chem_df$date)
+endDate <- max(chem_df$date)
+
+dateRange <- seq(startDate, endDate, by = "days")
+chem_daily <- tibble(date = dateRange, con_est = NA) %>%
+              full_join(., chem_df, by = 'date')
+q_daily <- tibble(date = dateRange, con_est = NA) %>%
+              full_join(., q_df, by = 'date')
+
+# WRTDSd
+#
+source('source/flux_method_egret_daily.R')
+eagle_wrtds <- adapt_ms_egret(chem_df = chem_df, q_df = q_df, ws_size = eagle_ws_area_ha,
+               lat = eagle_lat, long = eagle_long, site_data = site_data)
+
+ggplot(eagle_wrtds$Daily, aes(x = Date, y = FluxDay))+
+  geom_point()+
+  geom_line()
+
+ocon_wrtds <- adapt_ms_egret(chem_df = chem_df, q_df = q_df, ws_size = ocon_ws_area_ha,
+               lat = ocon_lat, long = ocon_long, site_data = site_data)
+
+ggplot(ocon_wrtds$Daily, aes(x = Date, y = FluxDay))+
+  geom_point()+
+  geom_line()
