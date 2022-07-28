@@ -2,10 +2,12 @@
 .Rhistory
 .RData
 .Ruserdata
-riverine_solute_flux_methods_evaluation.Rproj
-/data/*
+
 /streamlined/data/*
-/streamlined/out/*
-!/data/general
-plots/
 /streamlined/out_ms/*
+/streamlined/out/*
+
+!/data/general
+data/
+streamlined/out/
+vault/
