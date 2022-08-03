@@ -537,16 +537,18 @@ fluxpal <- brewer.pal(n=8, name='Dark2')
 # plot remainder
 # optional, only 'avg 'true' and 'wrtds'
 fluxalpha <- fluxpal
-fluxalpha[c(2:4, 6)] <- paste0(fluxpal[c(2:4, 6)], "00")
-fluxalpha[1] <- '#A7226E'
+fluxalpha[c(1, 2, 6, 3, 4, 7)] <- paste0(fluxpal[c(1, 2, 6, 3, 4, 7)], "00")
+## fluxalpha[2] <- '#A7226E'
 fluxalpha[5] <- '#2f9599'
 fluxalpha[7] <- '#ec2049'
 
-w3_plot <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = val)) +
+
+w3_plot <- ggplot(ws.data[ws.data$site_code == ws & ws.data$val < 10,], aes(x=wy, y = val)) +
   geom_point(aes(color = method, shape = method, size = method)) +
-  geom_line(aes(color = method)) +
+  geom_line(data = ws.data[ws.data$site_code == ws & ws.data$val < 10 & ws.data$method != 'wrtds',],
+            aes(color = method)) +
   theme_minimal() +
-  ylim(0, 15) +
+  ylim(0, 10) +
   scale_x_date(breaks = breaks.vec, limits = c(breaks.vec[1], breaks.vec[length(breaks.vec)]), date_labels = "%Y") +
   theme(panel.grid.major = element_blank(),
         ## legend.position="none",
@@ -556,15 +558,15 @@ w3_plot <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = val)) +
   scale_color_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
                      values = fluxalpha) +
   scale_shape_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
-                     values = c(20, 20, 20, 20, 20, 20, 4, 20)) +
+                     values = c(20, 20, 20, 20, 20, 20, 18, 20)) +
   scale_size_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
-                     values = c(4, 4, 4, 4, 4, 4, 6, 4)) +
+                     values = c(5, 5, 5, 5, 7, 5, 7, 5)) +
   annotate(geom="text",
                x=breaks.vec[length(breaks.vec)-2],
                y=120,
                label=ws.n.text,
                size = 6,
-               color="black")+                                                                 # Draw vlines to plot
+               color="black") +                                                                 # Draw vlines to plot
   geom_vline(xintercept = ws.outlier.wys,
-             col = "red", lwd = 0.1)
+             col = "darkgray", lwd = 0.25, linetype = 5)
 w3_plot
