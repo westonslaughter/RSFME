@@ -462,17 +462,148 @@ w3_flux_q <- grid.arrange(
              ## top = textGrob(plt_title, gp=gpar(fontsize=26, font=3), vjust = -2),
              vp = viewport(width=0.9, height=0.9))
 
-# just 2013, only non outlier year
-## w3_13 <- w3_daily %>%
-##   filter(water_year(date) == "2013")
+# just 2013
+w3_13 <- w3_daily %>%
+  filter(water_year(date) == "2013")
 
-w3_13_plot <- ggplot(w3_13, aes(x=date, y = log10(val))) +
+w3_13_samples <- w3_samples %>%
+  filter(wy %in% '2013', !is.na(con))
+
+sampledates <- unique(w3_13_samples$datetime)
+
+w3_13_plot <- ggplot(w3_13, aes(x=date, y = val)) +
   geom_point(aes(color = method)) +
   theme_minimal() +                                                                 # Draw vlines to plot
   ## ylim(0, 5) +
   geom_vline(xintercept = outlier.dates,
-             col = "red", lwd = 0.1)
+             col = "red", lwd = 0.4) +
+  geom_vline(xintercept = sampledates,
+             col = "blue", lwd = 0.05, linetype = 5) +
+  theme(
+    panel.grid.major.y  = element_blank()
+  ) + ggtitle("WRTDS vs True Flux, Watershed 3, 2013")
+
 w3_13_plot
+
+# just 2014
+w3_14 <- w3_daily %>%
+  filter(water_year(date) == "2014")
+
+w3_14_samples <- w3_samples %>%
+  filter(wy %in% '2014', !is.na(con))
+
+sampledates <- unique(w3_14_samples$datetime)
+
+w3_14_plot <- ggplot(w3_14, aes(x=date, y = val)) +
+  geom_point(aes(color = method)) +
+  theme_minimal() +                                                                 # Draw vlines to plot
+  ## ylim(0, 5) +
+  geom_vline(xintercept = outlier.dates,
+             col = "red", lwd = 0.4) +
+  geom_vline(xintercept = sampledates,
+             col = "blue", lwd = 0.05, linetype = 5) +
+  theme(
+    panel.grid.major.y  = element_blank()
+  ) + ggtitle("WRTDS vs True Flux, Watershed 3, 2014")
+
+w3_14_plot
+
+
+# just 2015
+w3_15 <- w3_daily %>%
+  filter(water_year(date) == "2015")
+
+w3_15_samples <- w3_samples %>%
+  filter(wy %in% '2015', !is.na(con))
+
+sampledates <- unique(w3_15_samples$datetime)
+
+w3_15_plot <- ggplot(w3_15, aes(x=date, y = val)) +
+  geom_point(aes(color = method)) +
+  theme_minimal() +                                                                 # Draw vlines to plot
+  ## ylim(0, 5) +
+  geom_vline(xintercept = outlier.dates,
+             col = "red", lwd = 0.4) +
+  geom_vline(xintercept = sampledates,
+             col = "blue", lwd = 0.05, linetype = 5) +
+  theme(
+    panel.grid.major.y  = element_blank()
+  ) + ggtitle("WRTDS vs True Flux, Watershed 3, 2015")
+
+w3_15_plot
+
+
+
+# just 2016
+w3_16 <- w3_daily %>%
+  filter(water_year(date) == "2016")
+
+w3_16_samples <- w3_samples %>%
+  filter(wy %in% '2016', !is.na(con))
+
+sampledates <- unique(w3_16_samples$datetime)
+
+w3_16_plot <- ggplot(w3_16, aes(x=date, y = val)) +
+  geom_point(aes(color = method)) +
+  theme_minimal() +                                                                 # Draw vlines to plot
+  ## ylim(0, 5) +
+  geom_vline(xintercept = outlier.dates,
+             col = "red", lwd = 0.4) +
+  geom_vline(xintercept = sampledates,
+             col = "blue", lwd = 0.05, linetype = 5) +
+  theme(
+    panel.grid.major.y  = element_blank()
+  ) + ggtitle("WRTDS vs True Flux, Watershed 3, 2016")
+
+w3_16_plot
+
+
+
+
+# just 2017
+w3_17 <- w3_daily %>%
+  filter(water_year(date) == "2017")
+
+w3_17_samples <- w3_samples %>%
+  filter(wy %in% '2017', !is.na(con))
+
+sampledates <- unique(w3_17_samples$datetime)
+
+w3_17_plot <- ggplot(w3_17, aes(x=date, y = val)) +
+  geom_point(aes(color = method)) +
+  theme_minimal() +                                                                 # Draw vlines to plot
+  ## ylim(0, 5) +
+  geom_vline(xintercept = outlier.dates,
+             col = "red", lwd = 0.4) +
+  geom_vline(xintercept = sampledates,
+             col = "blue", lwd = 0.05, linetype = 5) +
+  theme(
+    panel.grid.major.y  = element_blank()
+  ) + ggtitle("WRTDS vs True Flux, Watershed 3, 2017")
+
+w3_17_plot
+
+
+w3_dplt <- list()
+
+              w3_dplt[['2013']] = w3_13_plot
+              w3_dplt[['2014']] = w3_14_plot
+              w3_dplt[['2015']] = w3_15_plot
+              w3_dplt[['2016']] = w3_16_plot
+              w3_dplt[['2017']] = w3_17_plot
+
+## plt_title <- paste("Annual Flux of Nitrate Nitrogen (kg) in USGS Watersheds, Daily Thin")
+w3_flux_q <- grid.arrange(
+             w3_dplt[['2013']] + theme(legend.position = 'top'),
+             w3_dplt[['2014']],
+             w3_dplt[['2015']],
+             w3_dplt[['2016']],
+             w3_dplt[['2017']],
+             nrow = 5, ncol = 1,
+             ## top = textGrob(plt_title, gp=gpar(fontsize=26, font=3), vjust = -2),
+             vp = viewport(width=0.9, height=0.9))
+
+
 
 # getting w3 flux for all site data at once
 
