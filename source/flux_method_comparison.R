@@ -358,20 +358,28 @@ ws.n.text <- paste(ws, 'outliers:', ws.n.otl)
 print(ws.n.text)
 
 # remove these outliers
-ws.data <- ws.data[-ws.this.outliers,]
+## ws.data <- ws.data[-ws.this.outliers,]
 
 # colors
 library(RColorBrewer)
 fluxpal <- brewer.pal(n=7, name='Dark2')
-fluxalpha <- paste0(fluxpal, "90")
-fluxalpha[length(fluxalpha)] = fluxpal[length(fluxpal)]
+## fluxalpha <- paste0(fluxpal, "90")
+## fluxalpha[length(fluxalpha)] = fluxpal[length(fluxpal)]
+
 
 # plot remainder
-w3_plot <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = log(val, base = 1000))) +
+# optional, only 'avg 'true' and 'wrtds'
+fluxalpha <- fluxpal
+fluxalpha[c(2:4, 6)] <- paste0(fluxpal[c(2:4, 6)], "00")
+fluxalpha[1] <- '#A7226E'
+fluxalpha[5] <- '#2f9599'
+fluxalpha[7] <- '#ec2049'
+
+w3_plot <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = val)) +
   geom_point(aes(color = method, shape = method, size = method)) +
   ## geom_line(aes(group = method, color = method)) +
   theme_minimal() +
-  ## ylim(0, 500) +
+  ylim(0, 15) +
   scale_x_date(breaks = breaks.vec, limits = c(breaks.vec[1], breaks.vec[length(breaks.vec)]), date_labels = "%Y") +
   theme(panel.grid.major = element_blank(),
         ## legend.position="none",
@@ -455,8 +463,8 @@ w3_flux_q <- grid.arrange(
              vp = viewport(width=0.9, height=0.9))
 
 # just 2013, only non outlier year
-w3_13 <- w3_daily %>%
-  filter(water_year(date) == "2013")
+## w3_13 <- w3_daily %>%
+##   filter(water_year(date) == "2013")
 
 w3_13_plot <- ggplot(w3_13, aes(x=date, y = log10(val))) +
   geom_point(aes(color = method)) +
@@ -465,3 +473,98 @@ w3_13_plot <- ggplot(w3_13, aes(x=date, y = log10(val))) +
   geom_vline(xintercept = outlier.dates,
              col = "red", lwd = 0.1)
 w3_13_plot
+
+# getting w3 flux for all site data at once
+
+target_year <- as.numeric(as.character(good_years))
+
+raw_data_target_year <- raw_data_full %>%
+            mutate(wy = as.numeric(as.character(wy))) %>%
+            filter(wy %in% target_year)
+
+        q_target_year <- raw_data_target_year %>%
+            select(site_code, datetime, q_lps, wy)%>%
+            na.omit()
+
+        con_target_year <- raw_data_target_year %>%
+            select(site_code, datetime, con, wy) %>%
+            na.omit()
+
+        ### calculate annual flux ######
+        chem_df <- con_target_year
+        q_df <- q_target_year
+
+##### calculate WRTDS #####
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date') {
+  tryCatch(
+    expr = {
+        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
+
+        # still looking for reason why wrtds is 1K higher than others
+        flux_from_egret <- egret_results$Daily %>%
+          mutate(wy = water_year(Date)) %>%
+          group_by(wy) %>%
+          summarise(flux = warn_sum(FluxDay)/(area))
+        },
+    error = function(e) {
+            print('ERROR: WRTDS failed to run')
+            return(NA)
+        })
+    return(flux_from_egret)
+}
+
+write_feather(egret_results$Daily, 'data/ms/hbef/true/w3_wrtds_allyear_daily.feather')
+write_feather(flux_from_egret, 'data/ms/hbef/true/w3_wrtds_allyear_annual.feather')
+
+w3_allyr_flux <- flux_from_egret %>%
+  rename(val = flux) %>%
+  mutate(site_code = 'w3',
+         var = 'GN_NO3_N',
+         method = 'all_year',
+         ms_recommended = 0)
+
+# merge into ws.data
+w3_allyr_flux$wy <- as.Date(w3_allyr_flux$wy, format = "%Y")
+ws.data <- rbind(ws.data, w3_allyr_flux)
+
+
+library(RColorBrewer)
+fluxpal <- brewer.pal(n=8, name='Dark2')
+## fluxalpha <- paste0(fluxpal, "90")
+## fluxalpha[length(fluxalpha)] = fluxpal[length(fluxpal)]
+
+
+# plot remainder
+# optional, only 'avg 'true' and 'wrtds'
+fluxalpha <- fluxpal
+fluxalpha[c(2:4, 6)] <- paste0(fluxpal[c(2:4, 6)], "00")
+fluxalpha[1] <- '#A7226E'
+fluxalpha[5] <- '#2f9599'
+fluxalpha[7] <- '#ec2049'
+
+w3_plot <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = val)) +
+  geom_point(aes(color = method, shape = method, size = method)) +
+  geom_line(aes(color = method)) +
+  theme_minimal() +
+  ylim(0, 15) +
+  scale_x_date(breaks = breaks.vec, limits = c(breaks.vec[1], breaks.vec[length(breaks.vec)]), date_labels = "%Y") +
+  theme(panel.grid.major = element_blank(),
+        ## legend.position="none",
+        text = element_text(size = 24),
+        plot.title = element_text(size = 24, face = "bold")) +
+  ggtitle(ws) +
+  scale_color_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
+                     values = fluxalpha) +
+  scale_shape_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
+                     values = c(20, 20, 20, 20, 20, 20, 4, 20)) +
+  scale_size_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'true', 'all_year'),
+                     values = c(4, 4, 4, 4, 4, 4, 6, 4)) +
+  annotate(geom="text",
+               x=breaks.vec[length(breaks.vec)-2],
+               y=120,
+               label=ws.n.text,
+               size = 6,
+               color="black")+                                                                 # Draw vlines to plot
+  geom_vline(xintercept = ws.outlier.wys,
+             col = "red", lwd = 0.1)
+w3_plot
