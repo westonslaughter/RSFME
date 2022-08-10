@@ -22,26 +22,62 @@ prep_raw_for_riverload <- function(chem_df, q_df, datecol = 'date'){
 
 # FLUX CALCS
 ###### calculate period weighted#########
-calculate_pw <- function(chem_df, q_df, datecol = 'date'){
+calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
   rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+  if(is.null(period)){
   flux_from_pw <- method1(rl_data, ncomp = 1) %>%
     sum(.)/(1000*area)
+  }else{
+
+  if(period == 'month'){
+      flux_from_pw <- method1(rl_data, ncomp = 1, period = period)
+
+      flux_from_pw <- tibble(date = rownames(flux_from_pw),
+                          flux = (flux_from_pw[,1]/(1000*area)))
+  }
+  }
+
   return(flux_from_pw)
 }
 
 ###### calculate beale ######
-calculate_beale <- function(chem_df, q_df, datecol = 'date'){
+calculate_beale <- function(chem_df, q_df, datecol = 'date', period = NULL){
     rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+    if(is.null(period)){
     flux_from_beale <- beale.ratio(rl_data, ncomp = 1) %>%
       sum(.)/(1000*area)
+    }else{
+
+    if(period == 'month'){
+        flux_from_beale <- beale.ratio(rl_data, ncomp = 1, period = period)
+
+        flux_from_beale <- tibble(date = rownames(flux_from_beale),
+                               flux = (flux_from_beale[,1]/(1000*area)))
+    }
+    }
+
     return(flux_from_beale)
 }
 
 ##### calculate rating #####
-calculate_rating <- function(chem_df, q_df, datecol = 'date'){
+calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
     rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+    if(is.null(period)){
     flux_from_reg <- RiverLoad::rating(rl_data, ncomp = 1) %>%
         sum(.)/(1000*area)
+    }else{
+
+    if(period == 'month'){
+        flux_from_reg <- RiverLoad::rating(rl_data, ncomp = 1, period = period)
+
+        flux_from_reg <- tibble(date = rownames(flux_from_reg),
+                                  flux = (flux_from_reg[,1]/(1000*area)))
+    }
+    }
+
     return(flux_from_reg)
 }
 
@@ -100,13 +136,26 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
         return(rating_filled_df)
         }
 
-# calculate annual flux from composite
-calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no = 'site_no'){
+##### calculate monthly flux from composite ####
+calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no = 'site_no', period = NULL){
+
+        if(is.null(period)){
         flux_from__comp <- rating_filled_df %>%
             mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
             group_by(wy) %>%
           summarize(flux = sum(flux)) %>%
             mutate(site_code = site_no)
+        }else{
+
+        if(period == 'month'){
+            flux_from__comp <- rating_filled_df %>%
+                mutate(month = month(datetime),
+                       flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
+                group_by(wy, month) %>%
+                summarize(date = max(datetime),
+                          flux = sum(flux))
+        }
+        }
 
         return(flux_from__comp)
         }
