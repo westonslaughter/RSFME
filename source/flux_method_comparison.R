@@ -1,7 +1,15 @@
 library(ggplot2)
+library(dplyr)
+library(feather)
 library(grid)
 library(gridExtra)
 library(ggrepel)
+library(lfstat)
+
+source('./source/flux_methods.R')
+source('./source/helper_functions.R')
+
+
 
 # all HBEF
 hbef_ws <- c('w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9')
@@ -359,6 +367,13 @@ print(ws.n.text)
 
 # remove these outliers
 ## ws.data <- ws.data[-ws.this.outliers,]
+
+# bring in monthly flux from HBEF website
+hbef_flux_official <- read.csv('data/raw/hbef_published_flux/ws3_stream_monthly_flux_gHa.csv') %>%
+  mutate(date = paste0(Year, '-', Month, '-', '01'),
+         wy = water_year(date)) %>%
+  select(wy, NO3_N_flux)
+
 
 # colors
 library(RColorBrewer)
