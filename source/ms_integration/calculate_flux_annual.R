@@ -11,9 +11,18 @@ source('source/egret_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
+# ng
 data_dir <- here('streamlined/data/ms/hbef/')
 site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+
+# ws
+data_dir <- here('data/ms/hbef/')
+site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+
+# all other
+## site_info <- ms_download_site_data()
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -48,6 +57,10 @@ for(i in 1:length(site_files)){
     # read in discharge data
     raw_data_q <- read_feather(here(glue(data_dir, '/discharge/', site_code, '.feather')))
 
+    # errors
+    raw_data_q$val = errors::set_errors(raw_data_q$val, raw_data_q$val_err)
+    raw_data_q$val_err = NULL
+
     # initialize next loop
     solutes <- raw_data_con %>%
         ## switch to only Nitrate for now
@@ -74,8 +87,12 @@ for(i in 1:length(site_files)){
         filter(ms_interp == 0,
                val > 0) %>%
         filter(var == target_solute) %>%
-        select(datetime, val) %>%
+        select(datetime, val, val_err) %>%
         na.omit()
+
+    # errors
+    raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
+    raw_data_con$val_err = NULL
 
     # find acceptable years
     q_check <- raw_data_q %>%
@@ -107,9 +124,10 @@ for(i in 1:length(site_files)){
 
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
-        mutate(date = date(datetime)) %>%
-        group_by(date) %>%
+      mutate(date = date(datetime)) %>%
+      group_by(date) %>%
         summarize(val = mean(val)) %>%
+      # this is the step where concentration value errors turn to NA
         mutate(site_code = !!site_code, var = 'con') %>%
         select(site_code, datetime = date, var, val)
 
@@ -117,6 +135,7 @@ for(i in 1:length(site_files)){
         mutate(date = date(datetime)) %>%
         group_by(date) %>%
         summarize(val = mean(val)) %>%
+      # this is the step where discharge value errors turn to NA
         mutate(site_code = !!site_code, var = 'q_lps') %>%
         select(site_code, datetime = date, var, val)
 
@@ -128,7 +147,6 @@ for(i in 1:length(site_files)){
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
     ### Loop through good years #####
-    ## for(k in 42:47) {
     for(k in 1:length(good_years)){
 
       writeLines(paste("site:", site_code,
@@ -169,7 +187,6 @@ for(i in 1:length(site_files)){
         flux_annual_beale <- calculate_beale(chem_df, q_df, datecol = 'datetime')
 
         #### calculate rating #####
-
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
         #### calculate WRTDS ######
@@ -179,20 +196,8 @@ for(i in 1:length(site_files)){
           ws_size = area,
           lat = lat,
           long = long,
-          ## datamode = 'ms',
+          ms_hard_path = 'data/ms/macrosheds_vardata.csv',
           datecol = 'datetime')
-
-        # get daily WRTDS
-        ## flux_daily <- adapt_ms_egret(
-        ##   chem_df = chem_df,
-        ##   q_df = q_df,
-        ##   ws_size = area,
-        ##   lat = lat,
-        ##   long = long,
-        ##   datecol = 'datetime')
-
-        filepath = paste0('data/ms/hbef/true/w3_dailyWRTDS_', good_years[k], '.feather')
-        write_feather(flux_daily$Daily, filepath)
 
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
