@@ -15,6 +15,9 @@ data_dir <- here('streamlined/data/ms/hbef/')
 site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
 
+# non-fluxable solutes
+non_fluxable <- c('anionCharge')
+
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
                     site_code = as.character(),
@@ -67,6 +70,8 @@ for(i in 1:length(site_files)){
 
     #set to target solute
     target_solute <- solutes[j]
+
+    if(str_split_fixed(target_solute, pattern = '_', n = 2)[1,2] %in% non_fluxable){next}
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
@@ -136,8 +141,18 @@ for(i in 1:length(site_files)){
             mutate(wy = as.numeric(as.character(wy))) %>%
             filter(wy == target_year)
 
+        # find months with at least 2 samples in them
+        good_months <- raw_data_target_year %>%
+            mutate(month = month(datetime)) %>%
+            group_by(month) %>%
+            tally(!is.na(con)) %>%
+            filter(n > 1) %>%
+            pull(month)
+
+        # isolate to target year
         q_target_year <- raw_data_target_year %>%
             select(site_code, datetime, q_lps, wy)%>%
+            filter(wy == target_year) %>%
             na.omit()
 
         con_target_year <- raw_data_target_year %>%
@@ -163,15 +178,23 @@ for(i in 1:length(site_files)){
 
 
         #### calculate period weighted #####
-        flux_monthly_pw <- calculate_pw(chem_df, q_df,
+        pw_con_df <- chem_df %>%
+            mutate(month = month(datetime)) %>%
+            filter(month %in% good_months) %>%
+            select(-month)
+
+        flux_monthly_pw <- calculate_pw(chem_df = pw_con_df, q_df,
                                        datecol = 'datetime', period = 'month')
 
         #### calculate beale ######
-        flux_monthly_beale <- calculate_beale(chem_df, q_df, datecol = 'datetime',
+        beale_df <- chem_df %>%
+            mutate(month = month(datetime)) %>%
+            filter(month %in% good_months)
+
+        flux_monthly_beale <- calculate_beale(chem_df = beale_df, q_df, datecol = 'datetime',
                                               period = 'month')
 
         #### calculate rating #####
-
         flux_monthly_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime',
                                                 period = 'month')
 
@@ -185,8 +208,8 @@ for(i in 1:length(site_files)){
         flux_monthly_comp <- calculate_composite_from_rating_filled_df(rating_filled_df, period = 'month') %>%#,
                                                                     #sitecol = 'site_code')
             mutate(date = substr(as.character(date),1,nchar(as.character(date))-3)) %>%
-    ungroup() %>%
-    select(date, flux)
+            ungroup() %>%
+            select(date, flux)
 
         #### select MS favored ####
         paired_df <- q_df %>%
@@ -233,7 +256,10 @@ for(i in 1:length(site_files)){
                   mutate(flux_monthly_comp, method = 'composite')) %>%
             mutate(site_cod = !! site_code,
                    var = !!target_solute,
-                   ms_recommended = ifelse(method == !!ideal_method, 1, 0))
+                   ms_recommended = ifelse(method == !!ideal_method, 1, 0),
+                   good = ifelse(month(as_date(date)) %in% good_months, 1, 0)) %>%
+            filter(good == 1) %>%
+            select(-good)
 
         out_frame <- rbind(out_frame, target_year_out)
 
