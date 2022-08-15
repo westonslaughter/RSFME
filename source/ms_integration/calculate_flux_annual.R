@@ -12,17 +12,22 @@ source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
 # ng
-data_dir <- here('streamlined/data/ms/hbef/')
-site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+## data_dir <- here('streamlined/data/ms/hbef/')
+## site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
+## site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+## var_info <- nick/file/path
 
 # ws
 data_dir <- here('data/ms/hbef/')
+ms_root <- 'data/ms/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 # all other
+# data_dir <- ms_download_core_data()
 ## site_info <- ms_download_site_data()
+## var_info <- ms_download_variables()
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -83,16 +88,35 @@ for(i in 1:length(site_files)){
     #set to target solute
     target_solute <- solutes[j]
 
+    # convert all solutes to mg/L
+    solute_name <- ms_drop_var_prefix(target_solute)
+    solute_default_unit <- var_info[var_info$variable_code == solute_name,] %>%
+      filter(chem_category == 'stream_conc') %>%
+      pull(unit)
+
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
                val > 0) %>%
-        filter(var == target_solute) %>%
+      filter(var == target_solute) %>%
+      ms_conversions(convert_units_from = solute_default_unit,
+                                  convert_units_to = "mg/L",
+                                  macrosheds_root = ms_root)
+
+    %>%
         select(datetime, val, val_err) %>%
-        na.omit()
+          na.omit()
+
+    vars_convertable <- ms_vars %>%
+        filter(variable_code %in% 'NO3_N') %>%
+        pull(unit) %>%
+        tolower()
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
     raw_data_con$val_err = NULL
+
+    # unit conversions
+    raw_data_con <- raw_data_con %>%
 
     # find acceptable years
     q_check <- raw_data_q %>%
