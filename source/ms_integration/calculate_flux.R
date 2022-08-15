@@ -125,8 +125,8 @@ for(i in 1:length(site_files)){
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
     ### Loop through good years #####
-    for(k in 42:47) {
-    ## for(k in 1:length(good_years)){
+    ## for(k in 42:47) {
+    for(k in 1:length(good_years)){
 
       writeLines(paste("site:", site_code,
                        'year:', good_years[k]))
