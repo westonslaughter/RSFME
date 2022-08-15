@@ -229,8 +229,8 @@ for(i in 1:length(site_files)){
         target_year_out <- mutate(flux_monthly_average, method = 'average') %>%
             rbind(mutate(flux_monthly_pw, method = 'pw'),
                   mutate(flux_monthly_beale, method = 'beale'),
-                  mutate(flux_monthly_pw, method = 'rating'),
-                  mutate(flux_monthly_pw, method = 'composite')) %>%
+                  mutate(flux_monthly_rating, method = 'rating'),
+                  mutate(flux_monthly_comp, method = 'composite')) %>%
             mutate(site_cod = !! site_code,
                    var = !!target_solute,
                    ms_recommended = ifelse(method == !!ideal_method, 1, 0))
