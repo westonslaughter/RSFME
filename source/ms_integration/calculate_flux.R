@@ -22,7 +22,7 @@ out_frame <- tibble(wy = as.integer(),
                     val = as.numeric(), 
                     method = as.character(),
                     ms_reccomended = as.integer())
-## i = 2
+## i = 3
 # Loop through sites #####
 for(i in 1:length(site_files)){
     
@@ -122,9 +122,11 @@ for(i in 1:length(site_files)){
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
 
-    ## k = 16
+    ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
+    ## k = 1
     ### Loop through good years #####
-    for(k in 1:length(good_years)){
+    for(k in 42:47) {
+    ## for(k in 1:length(good_years)){
 
       writeLines(paste("site:", site_code,
                        'year:', good_years[k]))
@@ -177,6 +179,18 @@ for(i in 1:length(site_files)){
           ## datamode = 'ms',
           datecol = 'datetime')
 
+        # get daily WRTDS
+        ## flux_daily <- adapt_ms_egret(
+        ##   chem_df = chem_df,
+        ##   q_df = q_df,
+        ##   ws_size = area,
+        ##   lat = lat,
+        ##   long = long,
+        ##   datecol = 'datetime')
+
+        filepath = paste0('data/ms/hbef/true/w3_dailyWRTDS_', good_years[k], '.feather')
+        write_feather(flux_daily$Daily, filepath)
+
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = q_df,
@@ -184,8 +198,7 @@ for(i in 1:length(site_files)){
                                                             sitecol = 'site_code')
         
         # calculate annual flux from composite
-        flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df,
-                                                                    sitecol = 'site_code')
+        flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
         
         #### select MS favored ####
         paired_df <- q_df %>%
