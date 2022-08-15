@@ -126,7 +126,7 @@ for(i in 1:length(site_files)){
     daily_data_con <- raw_data_con %>%
       mutate(date = date(datetime)) %>%
       group_by(date) %>%
-        summarize(val = mean(val)) %>%
+      summarize(val = mean(val)) %>%
       # this is the step where concentration value errors turn to NA
         mutate(site_code = !!site_code, var = 'con') %>%
         select(site_code, datetime = date, var, val)
@@ -196,11 +196,10 @@ for(i in 1:length(site_files)){
           ws_size = area,
           lat = lat,
           long = long,
-          ms_hard_path = 'data/ms/macrosheds_vardata.csv',
           datecol = 'datetime')
 
         #### calculate composite ######
-        rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
+        rating_filled_df <- generate_residual_corrected_cote(wy = watn(chem_df = chem_df,
                                                             q_df = q_df,
                                                             datecol = 'datetime',
                                                             sitecol = 'site_code')

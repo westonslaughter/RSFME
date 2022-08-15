@@ -83,13 +83,10 @@ calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
 
 
 ##### calculate WRTDS #####
-calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date', ms_hard_path = NULL) {
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date') {
   tryCatch(
     expr = {
-      egret_results <- adapt_ms_egret(chem_df, q_df,
-                                      ws_size, lat, long,
-                                      datecol = datecol,
-                                      ms_hard_path = ms_hard_path)
+        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
 
         # still looking for reason why wrtds is 1K higher than others
         flux_from_egret <- egret_results$Daily$FluxDay %>%
@@ -163,9 +160,8 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         return(flux_from__comp)
         }
 
-
 # wrapper for WRTDS in EGRET
-adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE, ms_hard_path = NULL, datecol = 'date'){
+adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE, datecol = 'date'){
   # TODO:  reorder site data args to make fully optyional
 
     get_MonthSeq <- function(dates){
@@ -283,7 +279,9 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
     }
 
 
-    ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE, run_egret = TRUE, kalman = FALSE, quiet = FALSE, site_data = NULL, ms_hard_path = NULL){
+    ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE,
+             run_egret = TRUE, kalman = FALSE, quiet = FALSE,
+             site_data = NULL){
 
         # Checks
         if(any(! c('site_code', 'var', 'val', 'datetime') %in% names(stream_chemistry))){
@@ -323,21 +321,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                 mutate(site_type = 'stream_gauge')
         }
 
-       ms_vars <- NULL
-
-       if(is.null(ms_hard_path)){
-        tryCatch(
-          expr = {
-            ms_vars <- macrosheds::ms_download_variables()
-          },
-          error = function(e) {
-            print('MacroSheds variables catalog failed to download, retry using ms_hard_path')
-          }
-         )
-        } else {
-          print('trying to read variable catalog from ms_hard_path')
-        }
-          ms_vars <- read.csv(ms_hard_path)
+        ms_vars <- macrosheds::ms_download_variables()
+        ## ms_vars <- read.csv('data/ms/macrosheds_vardata.csv')
 
         site_code <- unique(stream_chemistry$site_code)
 
@@ -356,9 +341,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             min_chem <- stream_chemistry %>%
                 filter(val > 0) %>%
                 pull(val) %>%
+                # upsettingly, use of errors package makes min() now return NA instead of Inf
                 min()
 
-            if(!min_chem == Inf){
+            if(!is.infinite(min_chem)){
                 stream_chemistry <- stream_chemistry %>%
                     mutate(val = ifelse(val == 0, !!min_chem, val))
             }
@@ -406,6 +392,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             stream_chemistry <- stream_chemistry %>%
                 filter(!datetime %in% samples_to_remove)
         }
+
+      ## if(datamode == 'ms') {
+      ##   stream_chemistry <- stream_chemistry %>%
+      ##     # convert g to kg
+      ##       mutate(val = val / 1000000)
+      ## }
 
         # Set up EGRET Sample file
         Sample_file <- tibble(Name = site_code,
@@ -614,13 +606,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                         longitude = long,
                         site_type = 'stream_gauge')
 
-    egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem,
+  egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem,
                                       discharge = ms_q,
                                       prep_data = TRUE,
                                       site_data = site_data,
                                       kalman = kalman,
-                                      run_egret = TRUE,
-                                      ms_hard_path = ms_hard_path)
+                                      run_egret = TRUE)
 
     return(egret_results)
 }
