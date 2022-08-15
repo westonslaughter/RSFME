@@ -21,7 +21,10 @@ out_frame <- tibble(wy = as.integer(),
                     var = as.character(),
                     val = as.numeric(),
                     method = as.character(),
-                    ms_reccomended = as.integer())
+                    ms_reccomended = as.integer(),
+                    ms_interp_ratio = as.numeric(),
+                    ms_status_ratio = as.numeric(),
+                    ms_missing_ratio = as.numeric())
 ## i = 2
 # Loop through sites #####
 for(i in 1:length(site_files)){
@@ -42,16 +45,16 @@ for(i in 1:length(site_files)){
         pull(X)
 
     # read in chemistry data
-    raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+    raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0)
 
     # read in discharge data
     raw_data_q <- read_feather(here(glue(data_dir, '/discharge/', site_code, '.feather')))
 
     # initialize next loop
-    solutes <- raw_data_con %>%
+    solutes <- raw_data_con_in %>%
         ## switch to only Nitrate for now
-        filter(var == 'GN_NO3_N') %>%
+        #filter(var == 'GN_NO3_N') %>%
         ## filter(!str_detect(var, 'Charge'),
         ##        !str_detect(var, 'temp'),
         ##        !str_detect(var, 'pH')) %>%
@@ -129,6 +132,12 @@ for(i in 1:length(site_files)){
     ### Loop through good years #####
     for(k in 1:length(good_years)){
 
+        # calculate flag ratios to carry forward
+
+        raw_data_con
+        raw_data_q
+
+
       writeLines(paste("site:", site_code,
                        'year:', good_years[k]))
 
@@ -167,7 +176,6 @@ for(i in 1:length(site_files)){
         flux_annual_beale <- calculate_beale(chem_df, q_df, datecol = 'datetime')
 
         #### calculate rating #####
-
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
         #### calculate WRTDS ######
@@ -226,6 +234,7 @@ for(i in 1:length(site_files)){
                 ideal_method <- 'average'
             }
         }
+
 
         #### congeal fluxes ####
         target_year_out <- tibble(wy = as.character(target_year),
