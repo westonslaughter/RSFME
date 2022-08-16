@@ -19,16 +19,18 @@ source('source/usgs_helpers.R')
 ## var_info <- nick/file/path
 
 # ws
-data_dir <- here('data/ms/hbef/')
-site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('data/site/ms_site_info.csv'))
-var_info <- read_csv('data/ms/macrosheds_vardata.csv')
+## data_dir <- here('data/ms/hbef/')
+## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+## site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
 ## set path to ms data
-# ms_root <- 'data/ms/'
+## ms_root <- 'data/ms/'
 # data_dir <-  ms_download_core_data(ms_root)
-# site_info <- ms_download_site_data()
+
+site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
 
@@ -98,10 +100,15 @@ for(i in 1:length(site_files)){
       ## filter(chem_category == 'stream_conc') %>%
       pull(unit)
 
+    # read out conversions
+    writeLines(paste("\n  unit conversion for", target_solute,
+                     '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'))
+
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
                val > 0) %>%
         filter(var == target_solute) %>%
+        # conver units from macrosheds default to g/L
         ms_conversions(convert_units_from = tolower(solute_default_unit),
                                   convert_units_to = "g/l",
                                   macrosheds_root = ms_root) %>%
@@ -292,5 +299,3 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
-
-## w4df <- read_feather('data/ms/hbef/stream_flux/w4.feather')
