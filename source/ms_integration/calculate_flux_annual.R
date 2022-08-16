@@ -8,6 +8,7 @@ library(macrosheds)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
+source('source/ms_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
@@ -101,7 +102,7 @@ for(i in 1:length(site_files)){
                val > 0) %>%
         filter(var == target_solute) %>%
         ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "mg/l",
+                                  convert_units_to = "g/l",
                                   macrosheds_root = ms_root) %>%
         select(datetime, val, val_err) %>%
         na.omit()
