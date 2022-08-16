@@ -278,6 +278,8 @@ convert_unit <- function(x, input_unit, output_unit){
 }
 
 # End unit converstion
+
+# 'errors' package handlers
 sd_or_0 <- function(x, na.rm = FALSE) {
 
     #Only used to bypass the tyranny of the errors package not letting
@@ -289,4 +291,16 @@ sd_or_0 <- function(x, na.rm = FALSE) {
     if(length(x) == 1) return(0)
 
     x <- sqrt(var(x, na.rm = na.rm))
+}
+
+mean_or_x <- function(x, na.rm = FALSE) {
+    # also used to bypass the tyranny of the errors package not letting
+    # someone take the mean of an errors object of length 1. this func returns the
+    # original value if the group is length one, and the mean otherwise
+
+    if(length(x) == 1) return(x)
+
+    x <- mean(var(x, na.rm = na.rm))
+    print('multiple values meaned')
+    return(x)
 }

@@ -28,8 +28,8 @@ var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 ## set path to ms data
 # ms_root <- 'data/ms/'
 # data_dir <-  ms_download_core_data(ms_root)
-# site_info <- ms_download_site_data(ms_root)
-# var_info <-  ms_download_variables(ms_root)
+# site_info <- ms_download_site_data()
+var_info <-  ms_download_variables()
 
 
 # df to populate with annual flux values by method
@@ -94,7 +94,8 @@ for(i in 1:length(site_files)){
     # convert all solutes to mg/L
     solute_name <- ms_drop_var_prefix(target_solute)
     solute_default_unit <- var_info[var_info$variable_code == solute_name,] %>%
-      filter(chem_category == 'stream_conc') %>%
+      filter(variable_type == 'chem_discrete') %>%
+      ## filter(chem_category == 'stream_conc') %>%
       pull(unit)
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
@@ -107,17 +108,14 @@ for(i in 1:length(site_files)){
         select(datetime, val, val_err) %>%
         na.omit()
 
-    vars_convertable <- var_info %>%
-        filter(variable_code %in% 'NO3_N') %>%
-        pull(unit) %>%
-        tolower()
+    ## vars_convertable <- var_info %>%
+    ##     filter(variable_code %in% 'NO3_N') %>%
+    ##     pull(unit) %>%
+    ##     tolower()
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
     raw_data_con$val_err = NULL
-
-    # unit conversions
-    raw_data_con <- raw_data_con %>%
 
     # find acceptable years
     q_check <- raw_data_q %>%
@@ -151,7 +149,7 @@ for(i in 1:length(site_files)){
     daily_data_con <- raw_data_con %>%
       mutate(date = date(datetime)) %>%
       group_by(date) %>%
-      summarize(val = mean(val)) %>%
+      summarize(val = mean_or_x(val)) %>%
       # this is the step where concentration value errors turn to NA
         mutate(site_code = !!site_code, var = 'con') %>%
         select(site_code, datetime = date, var, val)
@@ -159,7 +157,7 @@ for(i in 1:length(site_files)){
     daily_data_q <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
         group_by(date) %>%
-        summarize(val = mean(val)) %>%
+        summarize(val = mean_or_x(val)) %>%
       # this is the step where discharge value errors turn to NA
         mutate(site_code = !!site_code, var = 'q_lps') %>%
         select(site_code, datetime = date, var, val)
