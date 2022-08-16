@@ -96,3 +96,7 @@ dt_to_wy_quarter <- function(datetime) {
    }
    return(xsum)
  }
+
+# run flux by site, year(s), method
+
+## ms_run_flux <- function(site, )

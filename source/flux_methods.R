@@ -22,26 +22,62 @@ prep_raw_for_riverload <- function(chem_df, q_df, datecol = 'date'){
 
 # FLUX CALCS
 ###### calculate period weighted#########
-calculate_pw <- function(chem_df, q_df, datecol = 'date'){
+calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
   rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+  if(is.null(period)){
   flux_from_pw <- method1(rl_data, ncomp = 1) %>%
     sum(.)/(1000*area)
+  }else{
+
+  if(period == 'month'){
+      flux_from_pw <- method1(rl_data, ncomp = 1, period = period)
+
+      flux_from_pw <- tibble(date = rownames(flux_from_pw),
+                          flux = (flux_from_pw[,1]/(1000*area)))
+  }
+  }
+
   return(flux_from_pw)
 }
 
 ###### calculate beale ######
-calculate_beale <- function(chem_df, q_df, datecol = 'date'){
+calculate_beale <- function(chem_df, q_df, datecol = 'date', period = NULL){
     rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+    if(is.null(period)){
     flux_from_beale <- beale.ratio(rl_data, ncomp = 1) %>%
       sum(.)/(1000*area)
+    }else{
+
+    if(period == 'month'){
+        flux_from_beale <- beale.ratio(rl_data, ncomp = 1, period = period)
+
+        flux_from_beale <- tibble(date = rownames(flux_from_beale),
+                               flux = (flux_from_beale[,1]/(1000*area)))
+    }
+    }
+
     return(flux_from_beale)
 }
 
 ##### calculate rating #####
-calculate_rating <- function(chem_df, q_df, datecol = 'date'){
+calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
     rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+    if(is.null(period)){
     flux_from_reg <- RiverLoad::rating(rl_data, ncomp = 1) %>%
         sum(.)/(1000*area)
+    }else{
+
+    if(period == 'month'){
+        flux_from_reg <- RiverLoad::rating(rl_data, ncomp = 1, period = period)
+
+        flux_from_reg <- tibble(date = rownames(flux_from_reg),
+                                  flux = (flux_from_reg[,1]/(1000*area)))
+    }
+    }
+
     return(flux_from_reg)
 }
 
@@ -100,13 +136,26 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
         return(rating_filled_df)
         }
 
-# calculate annual flux from composite
-calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no = 'site_no'){
+##### calculate monthly flux from composite ####
+calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no = 'site_no', period = NULL){
+
+        if(is.null(period)){
         flux_from__comp <- rating_filled_df %>%
             mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
             group_by(wy) %>%
           summarize(flux = sum(flux)) %>%
             mutate(site_code = site_no)
+        }else{
+
+        if(period == 'month'){
+            flux_from__comp <- rating_filled_df %>%
+                mutate(month = month(datetime),
+                       flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
+                group_by(wy, month) %>%
+                summarize(date = max(datetime),
+                          flux = sum(flux))
+        }
+        }
 
         return(flux_from__comp)
         }
@@ -273,6 +322,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         }
 
         ms_vars <- macrosheds::ms_download_variables()
+        ## ms_vars <- read.csv('data/ms/macrosheds_vardata.csv')
 
         site_code <- unique(stream_chemistry$site_code)
 
@@ -291,9 +341,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             min_chem <- stream_chemistry %>%
                 filter(val > 0) %>%
                 pull(val) %>%
+                # upsettingly, use of errors package makes min() now return NA instead of Inf
                 min()
 
-            if(!min_chem == Inf){
+            if(!is.infinite(min_chem)){
                 stream_chemistry <- stream_chemistry %>%
                     mutate(val = ifelse(val == 0, !!min_chem, val))
             }
@@ -639,3 +690,222 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 ## surfaceStart=NA
 ## surfaceEnd=NA
 ## localSample=NA
+ms_conversions <- function(d,
+                           convert_units_from = 'mg/l',
+                           convert_units_to,
+                           convert_molecules,
+                           macrosheds_root){
+
+    if(missing(macrosheds_root)){
+        stop('Please provide macrosheds_root, information needed to convert variables is stored here')
+    }
+
+    ms_vars_path <- paste0(macrosheds_root, '/ms_vars.feather')
+
+    if(! file.exists(ms_vars_path)){
+        ms_vars <- readr::read_csv('https://figshare.com/articles/dataset/variable_metadata/19358585/files/35134504',
+                                   col_types = readr::cols())
+
+        feather::write_feather(ms_vars, ms_vars_path)
+    } else{
+        ms_vars <- feather::read_feather(ms_vars_path)
+    }
+
+    #checks
+    cm <- ! missing(convert_molecules)
+    cuF <- ! missing(convert_units_from) && ! is.null(convert_units_from)
+    cuT <- ! missing(convert_units_to) && ! is.null(convert_units_to)
+
+    if(sum(cuF, cuT) == 1){
+        stop('convert_units_from and convert_units_to must be supplied together')
+    }
+    if(length(convert_units_from) != length(convert_units_to)){
+        stop('convert_units_from and convert_units_to must have the same length')
+    }
+
+    vars <- ms_drop_var_prefix(d$var)
+
+    if(any(!vars %in% ms_vars$variable_code)){
+        not_a_ms_var <- unique(vars[!vars %in% ms_vars$variable_code])
+        stop(paste0(paste(not_a_ms_var, collapse = ', '),
+                    ' is not a MacroSheds variable. only MacroSheds variables can be converted'))
+    }
+
+    if(any(duplicated(names(convert_units_from)))){
+        stop('duplicated names in convert_units_from')
+    }
+    if(any(duplicated(names(convert_units_to)))){
+        stop('duplicated names in convert_units_to')
+    }
+
+    vars_convertable <- ms_vars %>%
+        filter(variable_code %in% !!vars) %>%
+        pull(unit) %>%
+        tolower()
+
+    if(length(convert_units_from) == 1 && length(convert_units_to) == 1){
+        if(! all(vars_convertable == 'mg/l')){
+            print('WADDUP')
+            print(vars_convertable)
+            warning('unable to convert non-concentration variables')
+        }
+    } else{
+        if(! all(vars %in% names(convert_units_from)) || ! all(vars %in% names(convert_units_to))){
+            stop('when specifying individual variable conversions, all variables in d must be accounted for')
+        }
+            cu_shared_names <- base::intersect(names(convert_units_from),
+                                               names(convert_units_to))
+
+            if(length(cu_shared_names) != length(convert_units_to)){
+                stop('names of convert_units_from and convert_units_to must match')
+            }
+    }
+
+    convert_units_from <- tolower(convert_units_from)
+    convert_units_to <- tolower(convert_units_to)
+
+    whole_molecule <- c('NO3', 'SO4', 'PO4', 'SiO2', 'SiO3', 'NH4', 'NH3',
+                        'NO3_NO2')
+    element_molecule <- c('NO3_N', 'SO4_S', 'PO4_P', 'SiO2_S', 'SiO3_S', 'NH4_N',
+                          'NH3_N', 'NO3_NO2_N')
+
+    if(cm){
+        whole_to_element <- grep(paste0(paste0('^', convert_molecules, '$'), collapse = '|'),
+                                 whole_molecule)
+        element_to_whole <- grep(paste0(paste0('^', convert_molecules, '$'), collapse = '|'),
+                                 element_molecule)
+
+        if(length(element_to_whole) == 0 && length(whole_to_element) == 0){
+            stop(paste0('convert_molecules must be one of: ', paste(whole_molecule, collapse = ' '),
+                        ' or: ', paste(element_molecule, collapse = ' ')))
+        }
+    } else{
+        convert_molecules <- NULL
+    }
+
+    molecular_conversion_map <- list(
+        NH4 = 'N',
+        NO3 = 'N',
+        NH3 = 'N',
+        SiO2 = 'Si',
+        SiO3 = 'Si',
+        SO4 = 'S',
+        PO4 = 'P',
+        NO3_NO2 = 'N')
+
+    # handle molecular conversions, like NO3 -> NO3_N
+    if(cm && length(whole_to_element) > 0){
+        convert_molecules_element <-  whole_molecule[whole_to_element]
+        for(v in 1:length(convert_molecules_element)){
+
+            molecule_real <- ms_vars %>%
+                filter(variable_code == !!convert_molecules_element[v]) %>%
+                pull(molecule)
+
+            if(is.na(molecule_real)) {
+                molecule_real <- convert_molecules_element[v]
+            }
+
+            d$val[vars == convert_molecules_element[v]] <-
+                convert_molecule(x = d$val[vars == convert_molecules_element[v]],
+                                 from = molecule_real,
+                                 to = unname(molecular_conversion_map[v]))
+
+            check_double <- stringr::str_split_fixed(unname(molecular_conversion_map[v]), '', n = Inf)[1,]
+
+            if(length(check_double) > 1 && length(unique(check_double)) == 1) {
+                molecular_conversion_map[v] <- unique(check_double)
+            }
+
+            new_name <- paste0(d$var[vars == convert_molecules_element[v]], '_', unname(molecular_conversion_map[v]))
+
+            d$var[vars == convert_molecules_element[v]] <- new_name
+        }
+    }
+
+    # handle molecular conversions, like NO3_N -> NO3
+    if(cm && length(element_to_whole) > 0){
+        convert_molecules_element <-  element_molecule[element_to_whole]
+        for(v in 1:length(convert_molecules_element)){
+
+            molecule_real <- ms_vars %>%
+                filter(variable_code == !!convert_molecules_element[v]) %>%
+                pull(molecule)
+
+            if(is.na(molecule_real)) {
+                molecule_real <- convert_molecules_element[v]
+            }
+
+            d$val[vars == convert_molecules_element[v]] <-
+                convert_molecule(x = d$val[vars == convert_molecules_element[v]],
+                                 from = molecule_real,
+                                 to = whole_molecule[element_to_whole[v]])
+
+            # check_double <- stringr::str_split_fixed(unname(molecular_conversion_map[v]), '', n = Inf)[1,]
+            #
+            # if(length(check_double) > 1 && length(unique(check_double)) == 1) {
+            #     molecular_conversion_map[v] <- unique(check_double)
+            # }
+            old_var <- unique(d$var[vars == convert_molecules_element[v]])
+            new_name <- substr(d$var[vars == convert_molecules_element[v]], 0, nchar(old_var)-2)
+
+            d$var[vars == convert_molecules_element[v]] <- new_name
+        }
+    }
+
+    # Turn a single input into a named vector with all variables in dataframe
+    if(length(convert_units_from) == 1){
+        all_vars <- unique(vars)
+        convert_units_from <- rep(convert_units_from, length(all_vars))
+        names(convert_units_from) <- all_vars
+        convert_units_to <- rep(convert_units_to, length(all_vars))
+        names(convert_units_to) <- all_vars
+    }
+
+    # Converts input to grams if the final unit contains grams
+    for(i in 1:length(convert_units_from)){
+
+        unitfrom <- convert_units_from[i]
+        unitto <- convert_units_to[i]
+        v <- names(unitfrom)
+
+        g_conver <- FALSE
+        if(grepl('mol|eq', unitfrom) && grepl('g', unitto) || v %in% convert_molecules){
+
+            molecule_real <- ms_vars %>%
+                filter(variable_code == !!v) %>%
+                pull(molecule)
+
+            if(! is.na(molecule_real)){
+                formula <- molecule_real
+            } else {
+                formula <- v
+            }
+
+            d$val[vars == v] <- convert_to_gl(x = d$val[vars == v],
+                                              input_unit = unitfrom,
+                                              formula = formula,
+                                              ms_vars = ms_vars)
+
+            g_conver <- TRUE
+        }
+
+        #convert prefix
+        d$val[vars == v] <- convert_unit(x = d$val[vars == v],
+                                         input_unit = unitfrom,
+                                         output_unit = unitto)
+
+        #Convert to mol or eq if that is the output unit
+        if(grepl('mol|eq', unitto)) {
+
+            d$val[vars == v] <- convert_from_gl(x = d$val[vars == v],
+                                                input_unit = unitfrom,
+                                                output_unit = unitto,
+                                                molecule = v,
+                                                g_conver = g_conver,
+                                                ms_vars = ms_vars)
+        }
+    }
+
+    return(d)
+}
