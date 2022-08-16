@@ -19,15 +19,17 @@ source('source/usgs_helpers.R')
 
 # ws
 data_dir <- here('data/ms/hbef/')
-ms_root <- 'data/ms/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
-# all other
-# data_dir <- ms_download_core_data()
-## site_info <- ms_download_site_data()
-## var_info <- ms_download_variables()
+## run below if you do not already have macrosheds core data and catalogs
+## set path to ms data
+# ms_root <- 'data/ms/'
+# data_dir <-  ms_download_core_data(ms_root)
+# site_info <- ms_download_site_data(ms_root)
+# var_info <-  ms_download_variables(ms_root)
+
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -94,42 +96,17 @@ for(i in 1:length(site_files)){
       filter(chem_category == 'stream_conc') %>%
       pull(unit)
 
-    library(units)
-
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
                val > 0) %>%
-      filter(var == target_solute)
-
-    target_var_info <- var_info %>%
-      filter(
-        chem_category == 'stream_conc',
-        variable_code == ms_drop_var_prefix(target_solute)
-      )
-    target_var_unit <- target_var_info %>%
-      pull(unit)
-
-    raw_data_n <- raw_data_con %>%
-      # officialy set val units as whatever catalog default is
-      units::set_units(target_var_unit) %>%
-      # convert from this to grams per liter
-      units::set_units('g/l')
-
-
+        filter(var == target_solute) %>%
         ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "kg/l",
-                                  macrosheds_root = ms_root)
-
-        x <- conv_unit(x = raw_data_con$val,
-                                         'mg_per_l',
-                                         'kg_per_l')
-
-       x <- Distance::convert_units(raw_data_con$val, )
-    %>%
+                                  convert_units_to = "mg/l",
+                                  macrosheds_root = ms_root) %>%
         select(datetime, val, val_err) %>%
-          na.omit()
+        na.omit()
 
-    vars_convertable <- ms_vars %>%
+    vars_convertable <- var_info %>%
         filter(variable_code %in% 'NO3_N') %>%
         pull(unit) %>%
         tolower()

@@ -1,4 +1,3 @@
-library(measurements)
 ms_conversions <- function(d,
                            convert_units_from = 'mg/l',
                            convert_units_to,
@@ -198,18 +197,6 @@ ms_conversions <- function(d,
             g_conver <- TRUE
         }
 
-        #convert prefix
-        print('UNITS OCNVERT MAGIC TIME')
-        print(unitfrom)
-        print(unitfrom[[1]])
-        print(unitto)
-        print(unitto[[1]])
-
-
-        d$val[vars == v] <- convert_unit(x = d$val[vars == v],
-                                         input_unit = unitfrom,
-                                         output_unit = unitto)
-
         d$val[vars == v] <- convert_unit(x = d$val[vars == v],
                                          input_unit = unitfrom,
                                          output_unit = unitto)
@@ -228,6 +215,7 @@ ms_conversions <- function(d,
 
     return(d)
 }
+
 convert_unit <- function(x, input_unit, output_unit){
 
     units <- tibble(prefix = c('n', "u", "m", "c", "d", "h", "k", "M"),
