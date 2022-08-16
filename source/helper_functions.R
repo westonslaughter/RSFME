@@ -197,7 +197,7 @@ dt_to_wy_quarter <- function(datetime) {
 
          }
     ### run functions on data ####
-         if(period = 'annual'){
+         if(period == 'annual'){
 
              year_con_df <- raw_con_df %>%
                  mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -224,7 +224,7 @@ dt_to_wy_quarter <- function(datetime) {
             return(out_frame)
          } else
 
-         if(period = 'month'){
+         if(period == 'month'){
 
              year_con_df <- raw_con_df %>%
                  mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -237,7 +237,8 @@ dt_to_wy_quarter <- function(datetime) {
 
             con_tbl <- full_join(ms_interp, ms_status, by = 'month') %>%
                 full_join(ms_missing, by = 'month') %>%
-                mutate(wy = target_year)
+                mutate(wy = target_year,
+                       var = target_solute)
 
              year_q_df <- raw_q_df %>%
                  mutate(wy = water_year(datetime, origin = 'usgs')) %>%
@@ -249,7 +250,8 @@ dt_to_wy_quarter <- function(datetime) {
 
              q_tbl <- full_join(ms_interp, ms_status, by = 'month') %>%
                  full_join(ms_missing, by = 'month') %>%
-                 mutate(wy = target_year)
+                 mutate(wy = target_year,
+                        var = unique(year_q_df$var)[1])
 
              out_frame <- rbind(con_tbl, q_tbl)
              return(out_frame)

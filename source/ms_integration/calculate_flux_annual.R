@@ -132,16 +132,17 @@ for(i in 1:length(site_files)){
     ### Loop through good years #####
     for(k in 1:length(good_years)){
 
-        # calculate flag ratios to carry forward
-
-        raw_data_con
-        raw_data_q
-
-
       writeLines(paste("site:", site_code,
                        'year:', good_years[k]))
 
         target_year <- as.numeric(as.character(good_years[k]))
+
+        # calculate flag ratios to carry forward
+        flag_df <- carry_flags(raw_q_df = raw_data_q,
+                               raw_con_df = raw_data_con_in,
+                               target_year = target_year,
+                               target_solute = target_solute,
+                               period = 'annual')
 
         raw_data_target_year <- raw_data_full %>%
             mutate(wy = as.numeric(as.character(wy))) %>%
