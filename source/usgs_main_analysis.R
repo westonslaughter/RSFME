@@ -109,7 +109,7 @@ out_frame_main <- tibble(wy = as.integer(),
                     thin = as.character())
 
 # loop thru 'good' sites and perform thinnings and flux calcs
-for(i in 40:nrow(good_list)){
+for(i in 1:nrow(good_list)){
     # site information
     index <- good_list$index[i]
     site_no <- usgs_n$site_code[index]
