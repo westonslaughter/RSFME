@@ -20,9 +20,9 @@ source('source/usgs_helpers.R')
 
 # ws
 data_dir <- here('data/ms/hbef/')
-site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
-var_info <- read_csv('data/ms/macrosheds_vardata.csv')
+## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
 ## set path to ms data
@@ -30,7 +30,7 @@ var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ms_root <- 'data/ms/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-site_info <- ms_download_site_data()
+## site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
 
@@ -54,7 +54,7 @@ for(i in 1:length(site_files)){
     area <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(ws_area_ha)
-
+    # TODO: make the X and Y pulls below work on site_info from macrosheds retrieval func
     lat <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(Y)
@@ -110,18 +110,13 @@ for(i in 1:length(site_files)){
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
                val > 0) %>%
-        filter(var == target_solute) %>%
+      filter(var == target_solute) %>%
         # conver units from macrosheds default to g/L
         ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "g/l",
-                                  macrosheds_root = ms_root) %>%
+                                  convert_units_to = "mg/l",
+                       macrosheds_root = ms_root) %>%
         select(datetime, val, val_err) %>%
-        na.omit()
-
-    ## vars_convertable <- var_info %>%
-    ##     filter(variable_code %in% 'NO3_N') %>%
-    ##     pull(unit) %>%
-    ##     tolower()
+        tidyr::drop_na(datetime, val)
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
@@ -177,12 +172,12 @@ for(i in 1:length(site_files)){
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
 
-        q_full <- raw_data_full %>%
+    q_full <- raw_data_full %>%
           mutate(wy = as.numeric(as.character(wy))) %>%
             select(site_code, datetime, q_lps, wy)%>%
             na.omit()
 
-        con_full <- raw_data_full %>%
+    con_full <- raw_data_full %>%
           mutate(wy = as.numeric(as.character(wy))) %>%
             select(site_code, datetime, con, wy) %>%
             na.omit()
@@ -331,3 +326,72 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
+
+
+
+report_on_df <- function(data) {
+  water_years <- unique(data$wy)
+  for(watyr in water_years) {
+    data_wy <- data %>%
+      filter(wy == watyr)
+    nsamples <- nrow(data_wy)
+
+    writeLines(paste('Water Year:', watyr,
+                     '\n     number of samples:', nsamples))
+  }
+}
+
+  flux_na_reporter <- function(data) {
+      print('rows with NA flux day values:')
+      print(data[is.na(data$FluxDay),])
+      print('rows with Inf flux day values:')
+      print(data[is.infinite(data$FluxDay),])
+
+      print('returning DF of all Inf and NA rows')
+      data_error <- data[is.infinite(data$FluxDay) | is.na(data$FluxDay),]
+      return(data_error)
+  }
+
+
+      eg20_error <- eg20[is.infinite(eg20$FluxDay) | is.na(eg20$FluxDay),]
+
+
+
+ms_chem_60 <- ms_chem %>%
+  filter(wy < 1975)
+
+ms_chem_20 <- ms_chem %>%
+  filter(wy > 2010)
+
+egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
+                                      discharge = ms_q,
+                                      prep_data = TRUE,
+                                      site_data = site_data,
+                                      kalman = kalman,
+                                      run_egret = TRUE)
+
+
+egret_results_20 <- ms_run_egret_adapt(stream_chemistry = ms_chem_20,
+                                      discharge = ms_q,
+                                      prep_data = TRUE,
+                                      site_data = site_data,
+                                      kalman = kalman,
+                                      run_egret = TRUE)
+
+        flux_from_egret_60 <- egret_results$Daily %>%
+                    mutate(
+                      wy = water_year(Date)
+                    ) %>%
+          group_by(wy) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
+
+flux_from_egret_20 <- egret_results_20$Daily %>%
+                    mutate(
+                      wy = water_year(Date)
+                    ) %>%
+          group_by(wy) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
