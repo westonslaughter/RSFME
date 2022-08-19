@@ -193,7 +193,7 @@ for(i in 1:length(site_files)){
     #### calculate WRTDS ######
     flux_annual_wrtds <- calculate_wrtds(
           chem_df = con_full,
-          q_df = daily_data_q,
+          q_df = q_df,
           ws_size = area,
           lat = lat,
           long = long,
@@ -408,6 +408,7 @@ flux_from_egret_20 <- egret_results_20$Daily %>%
 
 
 
+## egret_report <- eList
 ## egret_report <- egret_results
 egret_report <- try(modelEstimation(eList,
                                      minNumObs = 100,
@@ -441,3 +442,33 @@ egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem,
                                       run_egret = TRUE,
                                       minNumObs = 100,
                                       minNumUncen = 50)
+
+detect_record_break <- function(data) {
+    data_time <- data %>%
+      select(Date, Julian) %>%
+      # how many days between this day and the next
+      mutate(days_gap = lead(Julian, 1) - Julian)
+    return(data_time)
+  }
+
+get_break_dates <- function(data, gap_period = 730) {
+  break_dates = list()
+  break_dates['start'] = list()
+  break_dates['end'] = list()
+
+  index = 1
+  # default 730 bc USGS says breaks below 2 years probably fine
+  for(i in 1:nrow(data)) {
+    gap <- data$days_gap[i]
+
+    if(!is.na(gap)) {
+
+    if(gap > gap_period) {
+      break_dates['start'][[index]] = c(data$Date[i])
+      break_dates['end'][[index]] = c(data$Date[i+1])
+      index = index + 1
+    }
+    }
+  }
+    return(break_dates)
+  }

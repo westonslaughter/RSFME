@@ -649,11 +649,11 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
           # trying USGS WRTDS flow min method,
           # also NOTE: USGS WRTDS manual says no flow > %0.2 of days is an issue
           if(min_q_method == 'USGS'){
+            print('using USGS reccomended no flow replacement method')
             mean_flow <- mean(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
 
             Daily_file <- Daily_file %>%
                 mutate(Q = ifelse(Q <= 0, !!mean_flow, Q))
-
           } else {
             # NOTE: could this be where Inf shows up too? like in min_chem?
             min_flow <- min(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
@@ -662,10 +662,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
                 mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
           }
 
-
-
-            Daily_file <- Daily_file %>%
-                mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
           # TODO: record zero flow days, and set flux for those days to zero
           # TODO: USGS WRTDS manual says method for replacing 0 and negative flow
           # is to set all 0 and neg to 0, then replace with 0.1% of mean flow
@@ -706,6 +702,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
         new_point <- sf::st_sfc(sf::st_point(c(site_lon, site_lat)), crs = 4326) %>%
             sf::st_transform(., crs = 4267)
 
+        # NOTE: question- should we allow interpolating back to Oct 1st from a
+        # record where first ever sample is Oct 26th? (as example of issue)
         INFO_file <- tibble(agency_cd = 'macrosheds',
                             site_no = site_code,
                             station_nm = site_code,
@@ -760,7 +758,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
                             paStart = 10,
                             paLong = 12)
 
-      eList <- EGRET::mergeReport(INFO_file,
+        eList <- EGRET::mergeReport(INFO_file,
                                   Daily_file,
                                   Sample_file,
                                   verbose = TRUE)
@@ -813,6 +811,16 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
                        FNConc = ifelse(Date %in% !!no_flow_days, NA, FNConc),
                        FNFlux = ifelse(Date %in% !!no_flow_days, 0, FNFlux))
         }
+
+        # find any 'breaks' in record
+        sample_rec <- detect_record_break(Sample_file)
+        sample_breaks <- get_break_dates(sample_rec)
+
+        # TODO: make dynamic in case of multiple long breaks
+        eList <- blankTime(eList,
+                         startBlank = sample_breaks['start'][[1]],
+                         endBlank = sample_breaks['end'][[1]]
+                         )
         return(eList)
     }
 
@@ -861,7 +869,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
 
 ## # mas adapt egret
 ## chem_df = chem_df
-## q_df = prep_data_q
 ## q_df = q_df
 ## ws_size = area
 ## lat = lat
