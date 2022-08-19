@@ -341,7 +341,9 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         }
 
 # wrapper for WRTDS in EGRET
-adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE, datecol = 'date'){
+adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
+                           site_data = NULL, kalman = FALSE,
+                           datecol = 'date', minNumObs = 2, minNumUncen = 2){
   # TODO:  reorder site data args to make fully optional
 
     get_MonthSeq <- function(dates){
@@ -461,7 +463,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
     ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE,
              run_egret = TRUE, kalman = FALSE, quiet = FALSE,
-             site_data = NULL){
+             site_data = NULL, min_q_method = 'USGS'){
 
         # Checks
         if(any(! c('site_code', 'var', 'val', 'datetime') %in% names(stream_chemistry))){
@@ -501,10 +503,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                 mutate(site_type = 'stream_gauge')
         }
 
-        ms_vars <- macrosheds::ms_download_variables()
         ## ms_vars <- read.csv('data/ms/macrosheds_vardata.csv')
-
+        ms_vars <- macrosheds::ms_download_variables()
         site_code <- unique(stream_chemistry$site_code)
+
 
         #### Prep Files ####
 
@@ -518,20 +520,24 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             # Egret can't accept 0s in the column for min val (either hack egret or do this or
             # look for detection limits)
             # TODO: use DL system to replace min vals, get_hdl()
-            min_chem <- stream_chemistry %>%
-              filter(val > 0,
-                     !is.na(val),
-                     !is.infinite(val),
-                     !is.null(val)) %>%
-              pull(val) %>%
-                # NOTE: upsettingly, use of errors package makes min() now return NA instead of Inf
-              min()
+            # TODO: AND/OR use EGRET built in uncertainty system, ConcLow = NA, ConcHigh = DL
+            ## min_chem <- stream_chemistry %>%
+            ##   filter(val > 0,
+            ##          !is.na(val),
+            ##          !is.infinite(val),
+            ##          !is.null(val)) %>%
+            ##   pull(val) %>%
+            ##     # NOTE: upsettingly, use of errors package makes min() now return NA instead of Inf
+            ##   min()
+
+            min_chem <- min(as.numeric(stream_chemistry[!is.infinite(stream_chemistry$val) & !is.na(stream_chemistry$val),]$val))
 
             # NOTE: changed so now we are forced to have a real number minimum value
-            if(!is.infinite(min_chem)){
-                stream_chemistry <- stream_chemistry %>%
-                    mutate(val = ifelse(val == 0, !!min_chem, val))
-            }
+            # NOTE: change to no conditional- min chem should never be infinite
+            ## if(!is.infinite(min_chem)){
+            ## }
+            stream_chemistry <- stream_chemistry %>%
+                mutate(val = ifelse(val == 0, !!min_chem, val))
 
             # Filter so there is only Q going into the model that also has chem
             stream_chemistry <- stream_chemistry %>%
@@ -539,6 +545,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                        month = lubridate::month(datetime)) %>%
                 mutate(waterYear = ifelse(month %in% c(10, 11, 12), year+1, year))
 
+            # TODO: filter isn't even active... and why 6?
             # Get years with at least 6 chemistry samples (bi-monthly sampling is a
             # reasonable requirement?)
             years_with_data <- stream_chemistry %>%
@@ -576,13 +583,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             stream_chemistry <- stream_chemistry %>%
                 filter(!datetime %in% samples_to_remove)
         }
-
-      ## if(datamode == 'ms') {
-      ##   stream_chemistry <- stream_chemistry %>%
-      ##     # convert g to kg
-      ##       mutate(val = val / 1000000)
-      ## }
-      ##
 
       # last redundant assurance of no NA, Inf, or 0 values
       stream_chemistry <- stream_chemistry %>%
@@ -635,20 +635,47 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
         if(prep_data){
             # Egret can't handle 0 in Q, setting 0 to the minimum Q ever reported seem reasonable
-            min_flow <- min(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
-
             no_flow_days <- Daily_file %>%
                 filter(Q == 0) %>%
                 pull(Date)
 
+            n_nfd <- length(no_flow_days)
+            n_record <- length(Daily_file$Date)
+            percent_no_flow <- n_nfd/n_record
+
+            writeLines(paste('days with no flow, percent of record:', percent_no_flow))
+
+
+          # trying USGS WRTDS flow min method,
+          # also NOTE: USGS WRTDS manual says no flow > %0.2 of days is an issue
+          if(min_q_method == 'USGS'){
+            mean_flow <- mean(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
+
+            Daily_file <- Daily_file %>%
+                mutate(Q = ifelse(Q <= 0, !!mean_flow, Q))
+
+          } else {
+            # NOTE: could this be where Inf shows up too? like in min_chem?
+            min_flow <- min(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
+
+            Daily_file <- Daily_file %>%
+                mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
+          }
+
+
+
             Daily_file <- Daily_file %>%
                 mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
           # TODO: record zero flow days, and set flux for those days to zero
-
+          # TODO: USGS WRTDS manual says method for replacing 0 and negative flow
+          # is to set all 0 and neg to 0, then replace with 0.1% of mean flow
+          # and they say final results should have this small flow increment
+          # subtracted from Q and flux results (pg 6, manual)
         }
 
         Daily_file <- Daily_file %>%
-            # 'extend' rollmean
+            # 'extend' rollmean NOTE: cpuld rollmean args cause mischief
+            # tho right align i believe is correct based off of egret docs``
             mutate(Q7 = zoo::rollmean(Q, 7, fill = 'extend', align = 'right'),
                    Q30 = zoo::rollmean(Q, 30, fill = 'extend', align = 'right'),
                    LogQ = log(Q))
@@ -733,8 +760,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                             paStart = 10,
                             paLong = 12)
 
-        eList <- EGRET::mergeReport(INFO_file, Daily_file, Sample_file,
-                                    verbose = TRUE)
+      eList <- EGRET::mergeReport(INFO_file,
+                                  Daily_file,
+                                  Sample_file,
+                                  verbose = TRUE)
 
         if(! run_egret){
             return(eList)
@@ -744,8 +773,11 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         # particularly what the nuber of obs truly is (helps contextualize absurd results)
         # keeping in mind EGRET says that anything less than n=60 is "dangerous"
         eList <- try(modelEstimation(eList,
-                                     minNumObs = 2,
-                                     minNumUncen = 2,
+                                     minNumObs = minNumObs,
+                                     minNumUncen = minNumUncen,
+                                     windowY = 7,
+                                     windowQ = 2,
+                                     windowS = 0.5,
                                      verbose = TRUE))
 
         if(inherits(eList, 'try-error')){

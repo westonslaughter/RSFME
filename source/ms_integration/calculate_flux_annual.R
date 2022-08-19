@@ -150,6 +150,8 @@ for(i in 1:length(site_files)){
     good_years <- q_good_years[q_good_years %in% conc_good_years]
     n_yrs <- length(good_years)
 
+    # TODO: calculate BREAK input to egret
+
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
       mutate(date = date(datetime)) %>%
@@ -167,25 +169,31 @@ for(i in 1:length(site_files)){
         mutate(site_code = !!site_code, var = 'q_lps') %>%
         select(site_code, datetime = date, var, val)
 
+    q_df <- daily_data_q %>%
+      pivot_wider(names_from = var,
+                  values_from = val)
+
     raw_data_full <- rbind(daily_data_con, daily_data_q) %>%
         pivot_wider(names_from = var, values_from = val, id_cols = c(site_code, datetime)) %>%
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
 
-    q_full <- raw_data_full %>%
-          mutate(wy = as.numeric(as.character(wy))) %>%
-            select(site_code, datetime, q_lps, wy)%>%
-            na.omit()
+    ## big nope on this i think
+    ## q_full <- raw_data_full %>%
+    ##       mutate(wy = as.numeric(as.character(wy))) %>%
+    ##         select(site_code, datetime, q_lps, wy)%>%
+    ##         na.omit()
 
     con_full <- raw_data_full %>%
           mutate(wy = as.numeric(as.character(wy))) %>%
             select(site_code, datetime, con, wy) %>%
+            ## filter(wy < 1975) %>%
             na.omit()
 
     #### calculate WRTDS ######
     flux_annual_wrtds <- calculate_wrtds(
           chem_df = con_full,
-          q_df = q_full,
+          q_df = daily_data_q,
           ws_size = area,
           lat = lat,
           long = long,
@@ -363,7 +371,9 @@ ms_chem_60 <- ms_chem %>%
 ms_chem_20 <- ms_chem %>%
   filter(wy > 2010)
 
-egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
+# extremely high flux estimates concentrated to first 5-10 smaples of record
+# these samples have normal flow values, extremely high ConcDay values
+egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
                                       discharge = ms_q,
                                       prep_data = TRUE,
                                       site_data = site_data,
@@ -395,3 +405,39 @@ flux_from_egret_20 <- egret_results_20$Daily %>%
           summarize(
             flux = warn_sum(FluxDay)/(area)
           )
+
+
+
+## egret_report <- egret_results
+egret_report <- try(modelEstimation(eList,
+                                     minNumObs = 100,
+                                     minNumUncen = 50,
+                                     windowY = 7,
+                                     windowQ = 2,
+                                     windowS = 0.5,
+                                     verbose = TRUE))
+# debugging plot
+plot(egret_report$Daily$Date , y = egret_report$Daily$FluxDay)
+
+# EGRET report minus first 6 measurements
+# NOTE: it is the first 13 measurements which contain the big outliers
+
+egret_qc <- egret_report$Daily %>%
+  select(Date, Q, Q7, Q30, ConcDay, FNFlux)
+
+
+head(egret_qc)
+
+
+plot(Daily_file$DecYear,Daily_file$Q,log="y",type="l")
+
+
+# game changer?
+egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem,
+                                      discharge = ms_q,
+                                      prep_data = TRUE,
+                                      site_data = site_data,
+                                      kalman = kalman,
+                                      run_egret = TRUE,
+                                      minNumObs = 100,
+                                      minNumUncen = 50)
