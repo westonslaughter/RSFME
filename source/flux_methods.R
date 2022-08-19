@@ -83,14 +83,37 @@ calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
 
 
 ##### calculate WRTDS #####
-calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date') {
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date', agg = 'default') {
   tryCatch(
     expr = {
+      # default sums all daily flux values in df
+      if(agg == 'default') {
         egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
 
-        # still looking for reason why wrtds is 1K higher than others
         flux_from_egret <- egret_results$Daily$FluxDay %>%
           warn_sum(.)/(area)
+      } else if(agg == 'annual') {
+        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
+        flux_from_egret <- egret_results$Daily %>%
+                    mutate(
+                      wy = water_year(Date)
+                    ) %>%
+          group_by(wy) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
+      } else if(agg == 'monthly') {
+        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
+        flux_from_egret <- egret_results$Daily %>%
+                    mutate(
+                      wy = water_year(Date),
+                      month = lubridate::month(Date)
+                    ) %>%
+          group_by(wy, month) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
+      }
         },
     error = function(e) {
             print('ERROR: WRTDS failed to run')

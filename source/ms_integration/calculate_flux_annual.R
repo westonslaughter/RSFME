@@ -8,7 +8,7 @@ library(macrosheds)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
-source('source/ms_overwrites.R')
+source('ms_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
@@ -19,16 +19,16 @@ source('source/usgs_helpers.R')
 ## var_info <- nick/file/path
 
 # ws
-## data_dir <- here('data/ms/hbef/')
-## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-## site_info  <- read_csv(here('data/site/ms_site_info.csv'))
-## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
+data_dir <- here('data/ms/hbef/')
+site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
 ## set path to ms data
-## ms_root <- 'data/ms/'
 # data_dir <-  ms_download_core_data(ms_root)
 
+ms_root <- 'data/ms/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
@@ -173,6 +173,27 @@ for(i in 1:length(site_files)){
         pivot_wider(names_from = var, values_from = val, id_cols = c(site_code, datetime)) %>%
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
+
+        q_full <- raw_data_full %>%
+          mutate(wy = as.numeric(as.character(wy))) %>%
+            select(site_code, datetime, q_lps, wy)%>%
+            na.omit()
+
+        con_full <- raw_data_full %>%
+          mutate(wy = as.numeric(as.character(wy))) %>%
+            select(site_code, datetime, con, wy) %>%
+            na.omit()
+
+    #### calculate WRTDS ######
+    flux_annual_wrtds <- calculate_wrtds(
+          chem_df = con_full,
+          q_df = q_full,
+          ws_size = area,
+          lat = lat,
+          long = long,
+          datecol = 'datetime',
+          agg = 'annual'
+         )
 
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
