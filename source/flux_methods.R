@@ -951,13 +951,13 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
 ##   longitude = long,
 ##   site_type = 'stream_gauge')
 
-stream_chemistry = ms_chem
-discharge = ms_q
-prep_data = TRUE
-site_data = site_data
-kalman = FALSE
-run_egret = TRUE
-quiet = FALSE
+## stream_chemistry = ms_chem
+## discharge = ms_q
+## prep_data = TRUE
+## site_data = site_data
+## kalman = FALSE
+## run_egret = TRUE
+## quiet = FALSE
 
 ## minNumObs = 100
 ## minNumUncen = 50
@@ -976,3 +976,26 @@ quiet = FALSE
 ## surfaceStart=NA
 ## surfaceEnd=NA
 ## localSample=NA
+
+report_on_df <- function(data) {
+  water_years <- unique(data$wy)
+  for(watyr in water_years) {
+    data_wy <- data %>%
+      filter(wy == watyr)
+    nsamples <- nrow(data_wy)
+
+    writeLines(paste('Water Year:', watyr,
+                     '\n     number of samples:', nsamples))
+  }
+}
+
+flux_na_reporter <- function(data) {
+      print('rows with NA flux day values:')
+      print(data[is.na(data$FluxDay),])
+      print('rows with Inf flux day values:')
+      print(data[is.infinite(data$FluxDay),])
+
+      print('returning DF of all Inf and NA rows')
+      data_error <- data[is.infinite(data$FluxDay) | is.na(data$FluxDay),]
+      return(data_error)
+}

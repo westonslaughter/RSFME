@@ -200,9 +200,9 @@ for(i in 1:length(site_files)){
           lat = lat,
           long = long,
           datecol = 'datetime',
-      agg = 'annual',
-      minNumObs = 100,
-      minNumUncen = 50
+          agg = 'annual',
+          minNumObs = 100,
+          minNumUncen = 50
          )
 
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
@@ -339,121 +339,3 @@ for(i in 1:length(site_files)){
 write_feather(out_frame, file_path)
 } # end site loop
 
-
-
-report_on_df <- function(data) {
-  water_years <- unique(data$wy)
-  for(watyr in water_years) {
-    data_wy <- data %>%
-      filter(wy == watyr)
-    nsamples <- nrow(data_wy)
-
-    writeLines(paste('Water Year:', watyr,
-                     '\n     number of samples:', nsamples))
-  }
-}
-
-flux_na_reporter <- function(data) {
-      print('rows with NA flux day values:')
-      print(data[is.na(data$FluxDay),])
-      print('rows with Inf flux day values:')
-      print(data[is.infinite(data$FluxDay),])
-
-      print('returning DF of all Inf and NA rows')
-      data_error <- data[is.infinite(data$FluxDay) | is.na(data$FluxDay),]
-      return(data_error)
-}
-
-
-      eg20_error <- eg20[is.infinite(eg20$FluxDay) | is.na(eg20$FluxDay),]
-
-
-
-ms_chem_60 <- ms_chem %>%
-  filter(wy < 1975)
-
-ms_chem_20 <- ms_chem %>%
-  filter(wy > 2010)
-
-# extremely high flux estimates concentrated to first 5-10 smaples of record
-# these samples have normal flow values, extremely high ConcDay values
-egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
-                                      discharge = ms_q,
-                                      prep_data = TRUE,
-                                      site_data = site_data,
-                                      kalman = kalman,
-                                      run_egret = TRUE)
-
-
-egret_results_20 <- ms_run_egret_adapt(stream_chemistry = ms_chem_20,
-                                      discharge = ms_q,
-                                      prep_data = TRUE,
-                                      site_data = site_data,
-                                      kalman = kalman,
-                                      run_egret = TRUE)
-
-        flux_from_egret_60 <- egret_results$Daily %>%
-                    mutate(
-                      wy = water_year(Date)
-                    ) %>%
-          group_by(wy) %>%
-          summarize(
-            flux = warn_sum(FluxDay)/(area)
-          )
-
-flux_from_egret_20 <- egret_results_20$Daily %>%
-                    mutate(
-                      wy = water_year(Date)
-                    ) %>%
-          group_by(wy) %>%
-          summarize(
-            flux = warn_sum(FluxDay)/(area)
-          )
-
-
-
-## egret_report <- eList
-## egret_report <- egret_results
-egret_report <- try(modelEstimation(eList,
-                                     minNumObs = 100,
-                                     minNumUncen = 50,
-                                     windowY = 7,
-                                     windowQ = 2,
-                                     windowS = 0.5,
-                                     verbose = TRUE))
-# debugging plot
-plot(egret_report$Daily$Date , y = egret_report$Daily$FluxDay)
-
-# EGRET report minus first 6 measurements
-# NOTE: it is the first 13 measurements which contain the big outliers
-
-egret_qc <- egret_report$Daily %>%
-  select(Date, Q, Q7, Q30, ConcDay, FNFlux)
-
-
-head(egret_qc)
-
-
-plot(Daily_file$DecYear,Daily_file$Q,log="y",type="l")
-
-
-# game changer?
-egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
-                                      discharge = ms_q,
-                                      prep_data = TRUE,
-                                      site_data = site_data,
-                                      kalman = kalman,
-                                      run_egret = TRUE,
-                                      minNumObs = 100,
-                                      minNumUncen = 50)
-
-kalman = FALSE
-egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem,
-                                      discharge = ms_q,
-                                      prep_data = TRUE,
-                                      site_data = site_data,
-                                      kalman = FALSE,
-                                      run_egret = TRUE,
-                                      minNumObs = 100,
-                                      minNumUncen = 50,
-                                      gap_period = 365)
