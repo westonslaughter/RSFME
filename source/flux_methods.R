@@ -629,6 +629,16 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
       n_records <- length(stream_chemistry$val)
       n_years <- length(unique(stream_chemistry$wy))
 
+      # if n_records < 100, change minNumObs accordingly
+      if(n_records < 100) {
+        minNumObs = n_records - ceiling(n_records*0.1)
+        minNumUncen = ceiling(minNumObs/2)
+        warning(paste('number of samples less than 100, modifying WRTDS arguments',
+                      '\n     minNumObs:', minNumObs,
+                      '\n     minNumUncen', minNumUncen))
+      }
+
+
       writeLines(paste('stream chemistry dataframe being passed into EGRET sample, \nfile has:',
                        n_records, 'samples over ', n_years, 'water years'))
 
