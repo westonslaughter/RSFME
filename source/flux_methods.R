@@ -240,17 +240,21 @@ calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
 
 
 ##### calculate WRTDS #####
-calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date', agg = 'default') {
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date', agg = 'default', minNumObs = 2, minNumUncen =2, gap_period = 730) {
   tryCatch(
     expr = {
       # default sums all daily flux values in df
-      if(agg == 'default') {
-        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
+      egret_results <- adapt_ms_egret(chem_df, q_df, ws_size,
+                                      lat, long,
+                                      datecol = datecol,
+                                      minNumObs = minNumObs,
+                                      minNumUncen = minNumUncen,
+                                      gap_period = gap_period)
 
+      if(agg == 'default') {
         flux_from_egret <- egret_results$Daily$FluxDay %>%
           warn_sum(.)/(area)
       } else if(agg == 'annual') {
-        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
         flux_from_egret <- egret_results$Daily %>%
                     mutate(
                       wy = water_year(Date)
@@ -260,7 +264,6 @@ calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date',
             flux = warn_sum(FluxDay)/(area)
           )
       } else if(agg == 'monthly') {
-        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
         flux_from_egret <- egret_results$Daily %>%
                     mutate(
                       wy = water_year(Date),
@@ -340,10 +343,42 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         return(flux_from__comp)
         }
 
+# functions for adapt_ms_egret
+detect_record_break <- function(data) {
+    data_time <- data %>%
+      select(Date, Julian) %>%
+      # how many days between this day and the next
+      mutate(days_gap = lead(Julian, 1) - Julian)
+    return(data_time)
+  }
+
+get_break_dates <- function(data, gap_period = 730) {
+  start = list()
+  end = list()
+
+  index = 1
+  # default 730 bc USGS says breaks below 2 years probably fine
+  for(i in 1:nrow(data)) {
+    gap <- data$days_gap[i]
+
+    if(!is.na(gap)) {
+
+    if(gap > gap_period) {
+      start[[index]] = c(data$Date[i])
+      end[[index]] = c(data$Date[i+1])
+      index = index + 1
+    }
+    }
+  }
+
+    break_dates = list('start' = start, 'end'= end)
+    return(break_dates)
+  }
+
 # wrapper for WRTDS in EGRET
 adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
                            site_data = NULL, kalman = FALSE,
-                           datecol = 'date', minNumObs = 2, minNumUncen = 2){
+                           datecol = 'date', minNumObs = 2, minNumUncen = 2, gap_period = 730){
   # TODO:  reorder site data args to make fully optional
 
     get_MonthSeq <- function(dates){
@@ -463,7 +498,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
 
     ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE,
              run_egret = TRUE, kalman = FALSE, quiet = FALSE,
-             site_data = NULL, min_q_method = 'USGS'){
+             site_data = NULL, min_q_method = 'USGS', minNumObs = 2, minNumUncen = 2, gap_period = 730){
 
         # Checks
         if(any(! c('site_code', 'var', 'val', 'datetime') %in% names(stream_chemistry))){
@@ -817,10 +852,26 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
         sample_breaks <- get_break_dates(sample_rec)
 
         # TODO: make dynamic in case of multiple long breaks
-        eList <- blankTime(eList,
-                         startBlank = sample_breaks['start'][[1]],
-                         endBlank = sample_breaks['end'][[1]]
-                         )
+      if(length(sample_breaks['start'][[1]]) < 1) {
+        writeLines(paste('no gap in record detected larger than', gap_period, 'days'))
+      } else {
+
+        for(i in length(sample_breaks['start'])) {
+          # set period
+          startBlank = sample_breaks['start'][[1]][[i]]
+          endBlank = sample_breaks['end'][[1]][[i]]
+
+          writeLines(paste('\n\nfound gap in record greater than', gap_period, 'days\n',
+                           'between', startBlank, 'and', endBlank, 'masking this period',
+                           'with EGRET blankTime()'))
+
+          eList <- blankTime(eList,
+                           startBlank = startBlank,
+                           endBlank = endBlank
+                           )
+        }
+      }
+
         return(eList)
     }
 
@@ -852,7 +903,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
                                       prep_data = TRUE,
                                       site_data = site_data,
                                       kalman = kalman,
-                                      run_egret = TRUE)
+                                      run_egret = TRUE,
+                                      minNumObs = minNumObs,
+                                      minNumUncen = minNumUncen,
+                                      gap_period = gap_period)
 
     return(egret_results)
 }
@@ -897,16 +951,18 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
 ##   longitude = long,
 ##   site_type = 'stream_gauge')
 
-## stream_chemistry = ms_chem
-## discharge = ms_q
-## prep_data = TRUE
-## site_data = site_data
-## kalman = FALSE
-## run_egret = TRUE
-## quiet = FALSE
+stream_chemistry = ms_chem
+discharge = ms_q
+prep_data = TRUE
+site_data = site_data
+kalman = FALSE
+run_egret = TRUE
+quiet = FALSE
 
-## minNumObs = 2
-## minNumUncen = 2
+## minNumObs = 100
+## minNumUncen = 50
+## gap_period = 730
+
 ## verbose = TRUE
 
 ## windowY = 7

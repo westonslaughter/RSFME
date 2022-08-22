@@ -45,6 +45,7 @@ out_frame <- tibble(wy = as.integer(),
                     ms_status_ratio = as.numeric(),
                     ms_missing_ratio = as.numeric())
 ## i = 2
+## i = 3
 # Loop through sites #####
 for(i in 1:length(site_files)){
 
@@ -89,6 +90,7 @@ for(i in 1:length(site_files)){
 
   ## Loop through solutes at site #####
   ## j = 1
+  ## j = 20
   for(j in 1:length(solutes)){
     writeLines(paste("site:", site_code,
                      "var:", solutes[j]))
@@ -198,7 +200,9 @@ for(i in 1:length(site_files)){
           lat = lat,
           long = long,
           datecol = 'datetime',
-          agg = 'annual'
+      agg = 'annual',
+      minNumObs = 100,
+      minNumUncen = 50
          )
 
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
@@ -349,7 +353,7 @@ report_on_df <- function(data) {
   }
 }
 
-  flux_na_reporter <- function(data) {
+flux_na_reporter <- function(data) {
       print('rows with NA flux day values:')
       print(data[is.na(data$FluxDay),])
       print('rows with Inf flux day values:')
@@ -358,7 +362,7 @@ report_on_df <- function(data) {
       print('returning DF of all Inf and NA rows')
       data_error <- data[is.infinite(data$FluxDay) | is.na(data$FluxDay),]
       return(data_error)
-  }
+}
 
 
       eg20_error <- eg20[is.infinite(eg20$FluxDay) | is.na(eg20$FluxDay),]
@@ -434,7 +438,7 @@ plot(Daily_file$DecYear,Daily_file$Q,log="y",type="l")
 
 
 # game changer?
-egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem,
+egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem_60,
                                       discharge = ms_q,
                                       prep_data = TRUE,
                                       site_data = site_data,
@@ -443,32 +447,13 @@ egret_results_60 <- ms_run_egret_adapt(stream_chemistry = ms_chem,
                                       minNumObs = 100,
                                       minNumUncen = 50)
 
-detect_record_break <- function(data) {
-    data_time <- data %>%
-      select(Date, Julian) %>%
-      # how many days between this day and the next
-      mutate(days_gap = lead(Julian, 1) - Julian)
-    return(data_time)
-  }
-
-get_break_dates <- function(data, gap_period = 730) {
-  break_dates = list()
-  break_dates['start'] = list()
-  break_dates['end'] = list()
-
-  index = 1
-  # default 730 bc USGS says breaks below 2 years probably fine
-  for(i in 1:nrow(data)) {
-    gap <- data$days_gap[i]
-
-    if(!is.na(gap)) {
-
-    if(gap > gap_period) {
-      break_dates['start'][[index]] = c(data$Date[i])
-      break_dates['end'][[index]] = c(data$Date[i+1])
-      index = index + 1
-    }
-    }
-  }
-    return(break_dates)
-  }
+kalman = FALSE
+egret_results <- ms_run_egret_adapt(stream_chemistry = ms_chem,
+                                      discharge = ms_q,
+                                      prep_data = TRUE,
+                                      site_data = site_data,
+                                      kalman = FALSE,
+                                      run_egret = TRUE,
+                                      minNumObs = 100,
+                                      minNumUncen = 50,
+                                      gap_period = 365)
