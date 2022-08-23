@@ -6,7 +6,11 @@ prep_raw_for_riverload <- function(chem_df, q_df, datecol = 'date'){
                 mutate(datetime = as.POSIXct(get(datecol), format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
                 mutate(flow = q_lps*0.001) %>% # convert lps to cubic meters per second)
                 select(datetime, flow) %>%
+                arrange(datetime) %>%
                 data.frame()
+    if(month(conv_q$datetime[1]) == 9 & day(conv_q$datetime[1]) == 30){
+        conv_q = conv_q[-1,]
+    }
 
     conv_c <- chem_df %>%
                 mutate(datetime = as.POSIXct(get(datecol), format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')) %>%
@@ -20,6 +24,7 @@ prep_raw_for_riverload <- function(chem_df, q_df, datecol = 'date'){
     return(db)
 }
 
+
 # FLUX CALCS
 ###### calculate period weighted#########
 calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
@@ -31,10 +36,162 @@ calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
   }else{
 
   if(period == 'month'){
-      flux_from_pw <- method1(rl_data, ncomp = 1, period = period)
+
+      method1_month <- function (db, ncomp, period)
+      {
+          notNA <- na.omit(db)
+          if (missing(ncomp)) {
+              print("ncomp is missing.")
+          }
+
+          if (period == "month") {
+              new <- notNA
+              new$newdate <- format(as.POSIXct(new$datetime), format = "%Y-%m")
+              maximum <- length(unique(new$newdate))
+              index <- vector(length = maximum)
+              for (i in 1:(maximum)) {
+                  index[i] <- length(which(new$newdate == (unique(new$newdate)[i])))
+              }
+              result <- vector("list", maximum)
+              for (i in 1:(maximum)) {
+                  seldata <- subset(new, new$newdate == unique(new$newdate)[i])
+                  result[[i]] <- seldata[, -which(names(seldata) %in%
+                                                      c("datetime", "flow", "newdate"))]/index[i]
+              }
+              if (is.null(nrow(result[[1]])) == T) {
+                  mat.conc <- as.matrix(unlist(result))
+              }
+              if (is.null(nrow(result[[1]])) == F) {
+                  mat.conc <- do.call(rbind, result)
+              }
+              concdate <- cbind.data.frame(notNA$datetime, mat.conc)
+              colnames(concdate)[1] <- c("datetime")
+              concdate$newdate <- format(as.POSIXct(concdate$datetime),
+                                         format = "%Y-%m")
+              aggrg.data <- matrix(nrow = length(unique(concdate$newdate)),
+                                   ncol = (ncomp))
+              for (i in 1:(ncomp)) {
+                  agg.init <- aggregate(concdate[, i + 1] ~ newdate,
+                                        concdate, sum)
+                  aggrg.data[, i] <- agg.init[, 2]
+                  colnames(aggrg.data) <- c(names(db)[3:(ncomp + 2)])
+                  if (i == (ncomp + 1))
+                      break
+              }
+              resultF <- vector("list", maximum)
+              for (i in 1:(maximum)) {
+                  seldata <- subset(new, new$newdate == unique(new$newdate)[i])
+                  resultF[[i]] <- seldata$flow/index[i]
+              }
+              flow.n <- matrix(unlist(resultF), ncol = 1, byrow = TRUE)
+              colnames(flow.n) <- c("flow")
+              flowdate <- cbind.data.frame(notNA$datetime, flow.n)
+              colnames(flowdate) <- c("datetime", "flow")
+              flowdate$newdate <- format(as.POSIXct(flowdate$datetime),
+                                         format = "%Y-%m")
+              aggrg.data1 <- (aggregate(flow ~ newdate, flowdate,
+                                        sum))
+              aggrg.data2 <- (aggregate(flow ~ newdate, flowdate,
+                                        sum))
+              aggrg.data2$newdate <- as.Date(paste(aggrg.data2$newdate,
+                                                   "-01", sep = ""))
+              aggrg.data2$newdate <- as.POSIXct(aggrg.data2$newdate,
+                                                format = "%Y-%m")
+              aggrg.flow <- (aggrg.data2[, -which(names(aggrg.data2) %in%
+                                                      c("newdate"))])
+              load <- (aggrg.flow * aggrg.data)
+              n <- nrow(db)
+              datemonth <- seq(as.POSIXct(db$datetime[1], tz = "CET"),
+                               as.POSIXct(db$datetime[n], tz = "CET"), "days")
+              b <- length(datemonth)
+              dateplus <- as.Date(datemonth[b]) + 2
+              daymonths <- as.numeric(round(diff(seq(as.POSIXct(datemonth[1],
+                                                                tz = "CET"), as.POSIXct(dateplus, tz = "CET"), "month")),
+                                            digits = 0))
+              if(length(good_months) < 12){
+                  daymonths <- daymonths[good_months]
+              }
+              method1 <- (load * (daymonths) * 86400)
+              rownames(method1) <- ((aggrg.data1)[, 1])
+              return(method1)
+          }
+          else if (period == "year") {
+              new <- notNA
+              new$newdate <- format(as.POSIXct(new$datetime), format = "%Y")
+              maximum <- length(unique(new$newdate))
+              index <- vector(length = maximum)
+              for (i in 1:(maximum)) {
+                  index[i] <- length(which(new$newdate == (unique(new$newdate)[i])))
+              }
+              result <- vector("list", maximum)
+              for (i in 1:(maximum)) {
+                  seldata <- subset(new, new$newdate == unique(new$newdate)[i])
+                  result[[i]] <- seldata[, -which(names(seldata) %in%
+                                                      c("datetime", "flow", "newdate"))]/index[i]
+              }
+              if (is.null(nrow(result[[1]])) == T) {
+                  mat.conc <- as.matrix(unlist(result))
+              }
+              if (is.null(nrow(result[[1]])) == F) {
+                  mat.conc <- do.call(rbind, result)
+              }
+              concdate <- cbind.data.frame(notNA$datetime, mat.conc)
+              colnames(concdate)[1] <- c("datetime")
+              concdate$newdate <- format(as.POSIXct(concdate$datetime),
+                                         format = "%Y")
+              aggrg.data <- matrix(nrow = length(unique(concdate$newdate)),
+                                   ncol = (ncomp))
+              for (i in 1:(ncomp)) {
+                  agg.init <- aggregate(concdate[, i + 1] ~ newdate,
+                                        concdate, sum)
+                  aggrg.data[, i] <- agg.init[, 2]
+                  colnames(aggrg.data) <- c(names(db)[3:(ncomp + 2)])
+                  if (i == (ncomp + 1))
+                      break
+              }
+              resultF <- vector("list", maximum)
+              for (i in 1:(maximum)) {
+                  seldata <- subset(new, new$newdate == unique(new$newdate)[i])
+                  resultF[[i]] <- seldata$flow/index[i]
+              }
+              flow.n <- matrix(unlist(resultF), ncol = 1, byrow = TRUE)
+              colnames(flow.n) <- c("flow")
+              flowdate <- cbind.data.frame(notNA$datetime, flow.n)
+              colnames(flowdate) <- c("datetime", "flow")
+              flowdate$newdate <- format(as.POSIXct(flowdate$datetime),
+                                         format = "%Y")
+              aggrg.data2 <- (aggregate(flow ~ newdate, flowdate,
+                                        sum))
+              aggrg.flow <- (aggrg.data2[, -which(names(aggrg.data2) %in%
+                                                      c("newdate"))])
+              load <- (aggrg.flow * aggrg.data)
+              is.leapyear = function(year) {
+                  return(((year%%4 == 0) & (year%%100 != 0)) | (year%%400 ==
+                                                                    0))
+              }
+              for (i in 1:(nrow(aggrg.data2))) {
+                  if (is.leapyear(as.numeric(aggrg.data2$newdate[i])) ==
+                      T) {
+                      method1 <- (load * (366) * 86400)
+                  }
+                  else {
+                      method1 <- (load * (365) * 86400)
+                  }
+              }
+              rownames(method1) <- aggrg.data2[, 1]
+              colnames(method1) <- c(names(db)[3:(ncomp + 2)])
+              return(method1)
+          }
+      }
+
+      ##### apply #####
+
+      flux_from_pw <- method1_month(rl_data, ncomp = 1, period = period)
 
       flux_from_pw <- tibble(date = rownames(flux_from_pw),
                           flux = (flux_from_pw[,1]/(1000*area)))
+
+
   }
   }
 
@@ -83,14 +240,40 @@ calculate_rating <- function(chem_df, q_df, datecol = 'date', period = NULL){
 
 
 ##### calculate WRTDS #####
-calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date') {
+calculate_wrtds <- function(chem_df, q_df, ws_size, lat, long, datecol = 'date', agg = 'default', minNumObs = 2, minNumUncen =2, gap_period = 730) {
   tryCatch(
     expr = {
-        egret_results <- adapt_ms_egret(chem_df, q_df, ws_size, lat, long, datecol = datecol)
+      # default sums all daily flux values in df
+      egret_results <- adapt_ms_egret(chem_df, q_df, ws_size,
+                                      lat, long,
+                                      datecol = datecol,
+                                      minNumObs = minNumObs,
+                                      minNumUncen = minNumUncen,
+                                      gap_period = gap_period)
 
-        # still looking for reason why wrtds is 1K higher than others
+      if(agg == 'default') {
         flux_from_egret <- egret_results$Daily$FluxDay %>%
           warn_sum(.)/(area)
+      } else if(agg == 'annual') {
+        flux_from_egret <- egret_results$Daily %>%
+                    mutate(
+                      wy = water_year(Date)
+                    ) %>%
+          group_by(wy) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
+      } else if(agg == 'monthly') {
+        flux_from_egret <- egret_results$Daily %>%
+                    mutate(
+                      wy = water_year(Date),
+                      month = lubridate::month(Date)
+                    ) %>%
+          group_by(wy, month) %>%
+          summarize(
+            flux = warn_sum(FluxDay)/(area)
+          )
+      }
         },
     error = function(e) {
             print('ERROR: WRTDS failed to run')
@@ -160,9 +343,43 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         return(flux_from__comp)
         }
 
+# functions for adapt_ms_egret
+detect_record_break <- function(data) {
+    data_time <- data %>%
+      select(Date, Julian) %>%
+      # how many days between this day and the next
+      mutate(days_gap = lead(Julian, 1) - Julian)
+    return(data_time)
+  }
+
+get_break_dates <- function(data, gap_period = 730) {
+  start = list()
+  end = list()
+
+  index = 1
+  # default 730 bc USGS says breaks below 2 years probably fine
+  for(i in 1:nrow(data)) {
+    gap <- data$days_gap[i]
+
+    if(!is.na(gap)) {
+
+    if(gap > gap_period) {
+      start[[index]] = c(data$Date[i])
+      end[[index]] = c(data$Date[i+1])
+      index = index + 1
+    }
+    }
+  }
+
+    break_dates = list('start' = start, 'end'= end)
+    return(break_dates)
+  }
+
 # wrapper for WRTDS in EGRET
-adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, kalman = FALSE, datecol = 'date'){
-  # TODO:  reorder site data args to make fully optyional
+adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
+                           site_data = NULL, kalman = FALSE,
+                           datecol = 'date', minNumObs = 2, minNumUncen = 2, gap_period = 730){
+  # TODO:  reorder site data args to make fully optional
 
     get_MonthSeq <- function(dates){
         ## dates <- Sample_file$Date
@@ -230,7 +447,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
       return(ydec)
     }
 
-
+    # TODO: rename with real descriptive name
     enlightened_yday <- function(dates, wy_type = 'usgs') {
         # get earliest and latest date from series
         start_date <- min(dates)
@@ -281,7 +498,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
     ms_run_egret_adapt <- function(stream_chemistry, discharge, prep_data = TRUE,
              run_egret = TRUE, kalman = FALSE, quiet = FALSE,
-             site_data = NULL){
+             site_data = NULL, min_q_method = 'USGS', minNumObs = 2, minNumUncen = 2, gap_period = 730){
 
         # Checks
         if(any(! c('site_code', 'var', 'val', 'datetime') %in% names(stream_chemistry))){
@@ -321,10 +538,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                 mutate(site_type = 'stream_gauge')
         }
 
-        ms_vars <- macrosheds::ms_download_variables()
         ## ms_vars <- read.csv('data/ms/macrosheds_vardata.csv')
-
+        ms_vars <- macrosheds::ms_download_variables()
         site_code <- unique(stream_chemistry$site_code)
+
 
         #### Prep Files ####
 
@@ -338,16 +555,24 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
             # Egret can't accept 0s in the column for min val (either hack egret or do this or
             # look for detection limits)
             # TODO: use DL system to replace min vals, get_hdl()
-            min_chem <- stream_chemistry %>%
-                filter(val > 0) %>%
-                pull(val) %>%
-                # upsettingly, use of errors package makes min() now return NA instead of Inf
-                min()
+            # TODO: AND/OR use EGRET built in uncertainty system, ConcLow = NA, ConcHigh = DL
+            ## min_chem <- stream_chemistry %>%
+            ##   filter(val > 0,
+            ##          !is.na(val),
+            ##          !is.infinite(val),
+            ##          !is.null(val)) %>%
+            ##   pull(val) %>%
+            ##     # NOTE: upsettingly, use of errors package makes min() now return NA instead of Inf
+            ##   min()
 
-            if(!is.infinite(min_chem)){
-                stream_chemistry <- stream_chemistry %>%
-                    mutate(val = ifelse(val == 0, !!min_chem, val))
-            }
+            min_chem <- min(as.numeric(stream_chemistry[!is.infinite(stream_chemistry$val) & !is.na(stream_chemistry$val),]$val))
+
+            # NOTE: changed so now we are forced to have a real number minimum value
+            # NOTE: change to no conditional- min chem should never be infinite
+            ## if(!is.infinite(min_chem)){
+            ## }
+            stream_chemistry <- stream_chemistry %>%
+                mutate(val = ifelse(val == 0, !!min_chem, val))
 
             # Filter so there is only Q going into the model that also has chem
             stream_chemistry <- stream_chemistry %>%
@@ -355,6 +580,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                        month = lubridate::month(datetime)) %>%
                 mutate(waterYear = ifelse(month %in% c(10, 11, 12), year+1, year))
 
+            # TODO: filter isn't even active... and why 6?
             # Get years with at least 6 chemistry samples (bi-monthly sampling is a
             # reasonable requirement?)
             years_with_data <- stream_chemistry %>%
@@ -393,11 +619,28 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                 filter(!datetime %in% samples_to_remove)
         }
 
-      ## if(datamode == 'ms') {
-      ##   stream_chemistry <- stream_chemistry %>%
-      ##     # convert g to kg
-      ##       mutate(val = val / 1000000)
-      ## }
+      # last redundant assurance of no NA, Inf, or 0 values
+      stream_chemistry <- stream_chemistry %>%
+        filter(!is.na(val),
+               !is.infinite(val),
+               !is.null(val),
+               val > 0)
+
+      n_records <- length(stream_chemistry$val)
+      n_years <- length(unique(stream_chemistry$wy))
+
+      # if n_records < 100, change minNumObs accordingly
+      if(n_records < 100) {
+        minNumObs = n_records - ceiling(n_records*0.1)
+        minNumUncen = ceiling(minNumObs/2)
+        warning(paste('number of samples less than 100, modifying WRTDS arguments',
+                      '\n     minNumObs:', minNumObs,
+                      '\n     minNumUncen', minNumUncen))
+      }
+
+
+      writeLines(paste('stream chemistry dataframe being passed into EGRET sample, \nfile has:',
+                       n_records, 'samples over ', n_years, 'water years'))
 
         # Set up EGRET Sample file
         Sample_file <- tibble(Name = site_code,
@@ -437,20 +680,43 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
         if(prep_data){
             # Egret can't handle 0 in Q, setting 0 to the minimum Q ever reported seem reasonable
-            min_flow <- min(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
-
             no_flow_days <- Daily_file %>%
                 filter(Q == 0) %>%
                 pull(Date)
 
+            n_nfd <- length(no_flow_days)
+            n_record <- length(Daily_file$Date)
+            percent_no_flow <- n_nfd/n_record
+
+            writeLines(paste('days with no flow, percent of record:', percent_no_flow))
+
+
+          # trying USGS WRTDS flow min method,
+          # also NOTE: USGS WRTDS manual says no flow > %0.2 of days is an issue
+          if(min_q_method == 'USGS'){
+            print('using USGS reccomended no flow replacement method')
+            mean_flow <- mean(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
+
+            Daily_file <- Daily_file %>%
+                mutate(Q = ifelse(Q <= 0, !!mean_flow, Q))
+          } else {
+            # NOTE: could this be where Inf shows up too? like in min_chem?
+            min_flow <- min(Daily_file$Q[Daily_file$Q > 0], na.rm = TRUE)
+
             Daily_file <- Daily_file %>%
                 mutate(Q = ifelse(Q <= 0, !!min_flow, Q))
-          # TODO: record zero flow days, and set flux for those days to zero
+          }
 
+          # TODO: record zero flow days, and set flux for those days to zero
+          # TODO: USGS WRTDS manual says method for replacing 0 and negative flow
+          # is to set all 0 and neg to 0, then replace with 0.1% of mean flow
+          # and they say final results should have this small flow increment
+          # subtracted from Q and flux results (pg 6, manual)
         }
 
         Daily_file <- Daily_file %>%
-            # 'extend' rollmean
+            # 'extend' rollmean NOTE: cpuld rollmean args cause mischief
+            # tho right align i believe is correct based off of egret docs``
             mutate(Q7 = zoo::rollmean(Q, 7, fill = 'extend', align = 'right'),
                    Q30 = zoo::rollmean(Q, 30, fill = 'extend', align = 'right'),
                    LogQ = log(Q))
@@ -481,6 +747,8 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
         new_point <- sf::st_sfc(sf::st_point(c(site_lon, site_lat)), crs = 4326) %>%
             sf::st_transform(., crs = 4267)
 
+        # NOTE: question- should we allow interpolating back to Oct 1st from a
+        # record where first ever sample is Oct 26th? (as example of issue)
         INFO_file <- tibble(agency_cd = 'macrosheds',
                             site_no = site_code,
                             station_nm = site_code,
@@ -535,16 +803,24 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                             paStart = 10,
                             paLong = 12)
 
-        eList <- EGRET::mergeReport(INFO_file, Daily_file, Sample_file,
-                                    verbose = TRUE)
+        eList <- EGRET::mergeReport(INFO_file,
+                                  Daily_file,
+                                  Sample_file,
+                                  verbose = TRUE)
 
         if(! run_egret){
             return(eList)
         }
 
+        # TODO: print stats on the record being calculated,
+        # particularly what the nuber of obs truly is (helps contextualize absurd results)
+        # keeping in mind EGRET says that anything less than n=60 is "dangerous"
         eList <- try(modelEstimation(eList,
-                                        minNumObs = 2,
-                                     minNumUncen = 2,
+                                     minNumObs = minNumObs,
+                                     minNumUncen = minNumUncen,
+                                     windowY = 7,
+                                     windowQ = 2,
+                                     windowS = 0.5,
                                      verbose = TRUE))
 
         if(inherits(eList, 'try-error')){
@@ -580,13 +856,39 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                        FNConc = ifelse(Date %in% !!no_flow_days, NA, FNConc),
                        FNFlux = ifelse(Date %in% !!no_flow_days, 0, FNFlux))
         }
+
+        # find any 'breaks' in record
+        sample_rec <- detect_record_break(Sample_file)
+        sample_breaks <- get_break_dates(sample_rec)
+
+        # TODO: make dynamic in case of multiple long breaks
+      if(length(sample_breaks['start'][[1]]) < 1) {
+        writeLines(paste('no gap in record detected larger than', gap_period, 'days'))
+      } else {
+
+        for(i in length(sample_breaks['start'])) {
+          # set period
+          startBlank = sample_breaks['start'][[1]][[i]]
+          endBlank = sample_breaks['end'][[1]][[i]]
+
+          writeLines(paste('\n\nfound gap in record greater than', gap_period, 'days\n',
+                           'between', startBlank, 'and', endBlank, 'masking this period',
+                           'with EGRET blankTime()'))
+
+          eList <- blankTime(eList,
+                           startBlank = startBlank,
+                           endBlank = endBlank
+                           )
+        }
+      }
+
         return(eList)
     }
 
     ms_chem <- chem_df %>%
       mutate(site_code = 'none',
         # TODO: variable handling
-           var = 'IS_NO3',
+           var = 'variable_chem',
            ms_status = 0,
            ms_interp = 0) %>%
       rename(val = con,
@@ -594,7 +896,7 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
     ms_q <- q_df %>%
       mutate(site_code = 'none',
-             var = 'IS_discharge',
+             var = 'variable_q',
              ms_status = 0,
              ms_interp = 0) %>%
       rename(val = q_lps,
@@ -611,7 +913,10 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
                                       prep_data = TRUE,
                                       site_data = site_data,
                                       kalman = kalman,
-                                      run_egret = TRUE)
+                                      run_egret = TRUE,
+                                      minNumObs = minNumObs,
+                                      minNumUncen = minNumUncen,
+                                      gap_period = gap_period)
 
     return(egret_results)
 }
@@ -628,13 +933,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 
 ## # mas adapt egret
 ## chem_df = chem_df
-## ## q_df = prep_data_q
 ## q_df = q_df
 ## ws_size = area
 ## lat = lat
 ## long = long
 
-## pre egret
+## ## pre egret
 ##   ms_chem <- chem_df %>%
 ##     mutate(site_code = 'none',
 ##            var = 'IS_NO3',
@@ -663,14 +967,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 ## site_data = site_data
 ## kalman = FALSE
 ## run_egret = TRUE
-
-## prep_data = TRUE
-## run_egret = TRUE
-## kalman = FALSE
 ## quiet = FALSE
 
-## minNumObs = 2
-## minNumUncen = 2
+## minNumObs = 100
+## minNumUncen = 50
+## gap_period = 730
+
 ## verbose = TRUE
 
 ## windowY = 7
@@ -680,232 +982,30 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long, site_data = NULL, 
 ## verbose = TRUE
 ## run.parallel = FALSE
 
-
-
-
-
-
-
 # surfaces
 ## surfaceStart=NA
 ## surfaceEnd=NA
 ## localSample=NA
-ms_conversions <- function(d,
-                           convert_units_from = 'mg/l',
-                           convert_units_to,
-                           convert_molecules,
-                           macrosheds_root){
 
-    if(missing(macrosheds_root)){
-        stop('Please provide macrosheds_root, information needed to convert variables is stored here')
-    }
+report_on_df <- function(data) {
+  water_years <- unique(data$wy)
+  for(watyr in water_years) {
+    data_wy <- data %>%
+      filter(wy == watyr)
+    nsamples <- nrow(data_wy)
 
-    ms_vars_path <- paste0(macrosheds_root, '/ms_vars.feather')
+    writeLines(paste('Water Year:', watyr,
+                     '\n     number of samples:', nsamples))
+  }
+}
 
-    if(! file.exists(ms_vars_path)){
-        ms_vars <- readr::read_csv('https://figshare.com/articles/dataset/variable_metadata/19358585/files/35134504',
-                                   col_types = readr::cols())
+flux_na_reporter <- function(data) {
+      print('rows with NA flux day values:')
+      print(data[is.na(data$FluxDay),])
+      print('rows with Inf flux day values:')
+      print(data[is.infinite(data$FluxDay),])
 
-        feather::write_feather(ms_vars, ms_vars_path)
-    } else{
-        ms_vars <- feather::read_feather(ms_vars_path)
-    }
-
-    #checks
-    cm <- ! missing(convert_molecules)
-    cuF <- ! missing(convert_units_from) && ! is.null(convert_units_from)
-    cuT <- ! missing(convert_units_to) && ! is.null(convert_units_to)
-
-    if(sum(cuF, cuT) == 1){
-        stop('convert_units_from and convert_units_to must be supplied together')
-    }
-    if(length(convert_units_from) != length(convert_units_to)){
-        stop('convert_units_from and convert_units_to must have the same length')
-    }
-
-    vars <- ms_drop_var_prefix(d$var)
-
-    if(any(!vars %in% ms_vars$variable_code)){
-        not_a_ms_var <- unique(vars[!vars %in% ms_vars$variable_code])
-        stop(paste0(paste(not_a_ms_var, collapse = ', '),
-                    ' is not a MacroSheds variable. only MacroSheds variables can be converted'))
-    }
-
-    if(any(duplicated(names(convert_units_from)))){
-        stop('duplicated names in convert_units_from')
-    }
-    if(any(duplicated(names(convert_units_to)))){
-        stop('duplicated names in convert_units_to')
-    }
-
-    vars_convertable <- ms_vars %>%
-        filter(variable_code %in% !!vars) %>%
-        pull(unit) %>%
-        tolower()
-
-    if(length(convert_units_from) == 1 && length(convert_units_to) == 1){
-        if(! all(vars_convertable == 'mg/l')){
-            print('WADDUP')
-            print(vars_convertable)
-            warning('unable to convert non-concentration variables')
-        }
-    } else{
-        if(! all(vars %in% names(convert_units_from)) || ! all(vars %in% names(convert_units_to))){
-            stop('when specifying individual variable conversions, all variables in d must be accounted for')
-        }
-            cu_shared_names <- base::intersect(names(convert_units_from),
-                                               names(convert_units_to))
-
-            if(length(cu_shared_names) != length(convert_units_to)){
-                stop('names of convert_units_from and convert_units_to must match')
-            }
-    }
-
-    convert_units_from <- tolower(convert_units_from)
-    convert_units_to <- tolower(convert_units_to)
-
-    whole_molecule <- c('NO3', 'SO4', 'PO4', 'SiO2', 'SiO3', 'NH4', 'NH3',
-                        'NO3_NO2')
-    element_molecule <- c('NO3_N', 'SO4_S', 'PO4_P', 'SiO2_S', 'SiO3_S', 'NH4_N',
-                          'NH3_N', 'NO3_NO2_N')
-
-    if(cm){
-        whole_to_element <- grep(paste0(paste0('^', convert_molecules, '$'), collapse = '|'),
-                                 whole_molecule)
-        element_to_whole <- grep(paste0(paste0('^', convert_molecules, '$'), collapse = '|'),
-                                 element_molecule)
-
-        if(length(element_to_whole) == 0 && length(whole_to_element) == 0){
-            stop(paste0('convert_molecules must be one of: ', paste(whole_molecule, collapse = ' '),
-                        ' or: ', paste(element_molecule, collapse = ' ')))
-        }
-    } else{
-        convert_molecules <- NULL
-    }
-
-    molecular_conversion_map <- list(
-        NH4 = 'N',
-        NO3 = 'N',
-        NH3 = 'N',
-        SiO2 = 'Si',
-        SiO3 = 'Si',
-        SO4 = 'S',
-        PO4 = 'P',
-        NO3_NO2 = 'N')
-
-    # handle molecular conversions, like NO3 -> NO3_N
-    if(cm && length(whole_to_element) > 0){
-        convert_molecules_element <-  whole_molecule[whole_to_element]
-        for(v in 1:length(convert_molecules_element)){
-
-            molecule_real <- ms_vars %>%
-                filter(variable_code == !!convert_molecules_element[v]) %>%
-                pull(molecule)
-
-            if(is.na(molecule_real)) {
-                molecule_real <- convert_molecules_element[v]
-            }
-
-            d$val[vars == convert_molecules_element[v]] <-
-                convert_molecule(x = d$val[vars == convert_molecules_element[v]],
-                                 from = molecule_real,
-                                 to = unname(molecular_conversion_map[v]))
-
-            check_double <- stringr::str_split_fixed(unname(molecular_conversion_map[v]), '', n = Inf)[1,]
-
-            if(length(check_double) > 1 && length(unique(check_double)) == 1) {
-                molecular_conversion_map[v] <- unique(check_double)
-            }
-
-            new_name <- paste0(d$var[vars == convert_molecules_element[v]], '_', unname(molecular_conversion_map[v]))
-
-            d$var[vars == convert_molecules_element[v]] <- new_name
-        }
-    }
-
-    # handle molecular conversions, like NO3_N -> NO3
-    if(cm && length(element_to_whole) > 0){
-        convert_molecules_element <-  element_molecule[element_to_whole]
-        for(v in 1:length(convert_molecules_element)){
-
-            molecule_real <- ms_vars %>%
-                filter(variable_code == !!convert_molecules_element[v]) %>%
-                pull(molecule)
-
-            if(is.na(molecule_real)) {
-                molecule_real <- convert_molecules_element[v]
-            }
-
-            d$val[vars == convert_molecules_element[v]] <-
-                convert_molecule(x = d$val[vars == convert_molecules_element[v]],
-                                 from = molecule_real,
-                                 to = whole_molecule[element_to_whole[v]])
-
-            # check_double <- stringr::str_split_fixed(unname(molecular_conversion_map[v]), '', n = Inf)[1,]
-            #
-            # if(length(check_double) > 1 && length(unique(check_double)) == 1) {
-            #     molecular_conversion_map[v] <- unique(check_double)
-            # }
-            old_var <- unique(d$var[vars == convert_molecules_element[v]])
-            new_name <- substr(d$var[vars == convert_molecules_element[v]], 0, nchar(old_var)-2)
-
-            d$var[vars == convert_molecules_element[v]] <- new_name
-        }
-    }
-
-    # Turn a single input into a named vector with all variables in dataframe
-    if(length(convert_units_from) == 1){
-        all_vars <- unique(vars)
-        convert_units_from <- rep(convert_units_from, length(all_vars))
-        names(convert_units_from) <- all_vars
-        convert_units_to <- rep(convert_units_to, length(all_vars))
-        names(convert_units_to) <- all_vars
-    }
-
-    # Converts input to grams if the final unit contains grams
-    for(i in 1:length(convert_units_from)){
-
-        unitfrom <- convert_units_from[i]
-        unitto <- convert_units_to[i]
-        v <- names(unitfrom)
-
-        g_conver <- FALSE
-        if(grepl('mol|eq', unitfrom) && grepl('g', unitto) || v %in% convert_molecules){
-
-            molecule_real <- ms_vars %>%
-                filter(variable_code == !!v) %>%
-                pull(molecule)
-
-            if(! is.na(molecule_real)){
-                formula <- molecule_real
-            } else {
-                formula <- v
-            }
-
-            d$val[vars == v] <- convert_to_gl(x = d$val[vars == v],
-                                              input_unit = unitfrom,
-                                              formula = formula,
-                                              ms_vars = ms_vars)
-
-            g_conver <- TRUE
-        }
-
-        #convert prefix
-        d$val[vars == v] <- convert_unit(x = d$val[vars == v],
-                                         input_unit = unitfrom,
-                                         output_unit = unitto)
-
-        #Convert to mol or eq if that is the output unit
-        if(grepl('mol|eq', unitto)) {
-
-            d$val[vars == v] <- convert_from_gl(x = d$val[vars == v],
-                                                input_unit = unitfrom,
-                                                output_unit = unitto,
-                                                molecule = v,
-                                                g_conver = g_conver,
-                                                ms_vars = ms_vars)
-        }
-    }
-
-    return(d)
+      print('returning DF of all Inf and NA rows')
+      data_error <- data[is.infinite(data$FluxDay) | is.na(data$FluxDay),]
+      return(data_error)
 }

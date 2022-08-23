@@ -8,7 +8,7 @@ library(macrosheds)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
-source('source/ms_overwrites.R')
+source('ms_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
@@ -19,18 +19,18 @@ source('source/usgs_helpers.R')
 ## var_info <- nick/file/path
 
 # ws
-## data_dir <- here('data/ms/hbef/')
+data_dir <- here('data/ms/hbef/')
 ## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-## site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 ## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
 ## set path to ms data
-## ms_root <- 'data/ms/'
 # data_dir <-  ms_download_core_data(ms_root)
 
+ms_root <- 'data/ms/'
 site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-site_info <- ms_download_site_data()
+## site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
 
@@ -40,7 +40,11 @@ out_frame <- tibble(wy = as.integer(),
                     var = as.character(),
                     val = as.numeric(),
                     method = as.character(),
-                    ms_reccomended = as.integer())
+                    ms_reccomended = as.integer(),
+                    ms_interp_ratio = as.numeric(),
+                    ms_status_ratio = as.numeric(),
+                    ms_missing_ratio = as.numeric())
+## i = 2
 ## i = 3
 # Loop through sites #####
 for(i in 1:length(site_files)){
@@ -51,7 +55,7 @@ for(i in 1:length(site_files)){
     area <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(ws_area_ha)
-
+    # TODO: make the X and Y pulls below work on site_info from macrosheds retrieval func
     lat <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(Y)
@@ -61,7 +65,7 @@ for(i in 1:length(site_files)){
         pull(X)
 
     # read in chemistry data
-    raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+    raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0)
 
     # read in discharge data
@@ -72,9 +76,9 @@ for(i in 1:length(site_files)){
     raw_data_q$val_err = NULL
 
     # initialize next loop
-    solutes <- raw_data_con %>%
+    solutes <- raw_data_con_in %>%
         ## switch to only Nitrate for now
-        filter(var == 'GN_NO3_N') %>%
+        #filter(var == 'GN_NO3_N') %>%
         ## filter(!str_detect(var, 'Charge'),
         ##        !str_detect(var, 'temp'),
         ##        !str_detect(var, 'pH')) %>%
@@ -86,6 +90,7 @@ for(i in 1:length(site_files)){
 
   ## Loop through solutes at site #####
   ## j = 1
+  ## j = 20
   for(j in 1:length(solutes)){
     writeLines(paste("site:", site_code,
                      "var:", solutes[j]))
@@ -107,18 +112,13 @@ for(i in 1:length(site_files)){
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
                val > 0) %>%
-        filter(var == target_solute) %>%
+      filter(var == target_solute) %>%
         # conver units from macrosheds default to g/L
         ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "g/l",
-                                  macrosheds_root = ms_root) %>%
+                                  convert_units_to = "mg/l",
+                       macrosheds_root = ms_root) %>%
         select(datetime, val, val_err) %>%
-        na.omit()
-
-    ## vars_convertable <- var_info %>%
-    ##     filter(variable_code %in% 'NO3_N') %>%
-    ##     pull(unit) %>%
-    ##     tolower()
+        tidyr::drop_na(datetime, val)
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
@@ -152,6 +152,8 @@ for(i in 1:length(site_files)){
     good_years <- q_good_years[q_good_years %in% conc_good_years]
     n_yrs <- length(good_years)
 
+    # TODO: calculate BREAK input to egret
+
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
       mutate(date = date(datetime)) %>%
@@ -169,10 +171,39 @@ for(i in 1:length(site_files)){
         mutate(site_code = !!site_code, var = 'q_lps') %>%
         select(site_code, datetime = date, var, val)
 
+    q_df <- daily_data_q %>%
+      pivot_wider(names_from = var,
+                  values_from = val)
+
     raw_data_full <- rbind(daily_data_con, daily_data_q) %>%
         pivot_wider(names_from = var, values_from = val, id_cols = c(site_code, datetime)) %>%
         mutate(wy = water_year(datetime, origin = 'usgs')) %>%
         filter(wy %in% good_years)
+
+    ## big nope on this i think
+    ## q_full <- raw_data_full %>%
+    ##       mutate(wy = as.numeric(as.character(wy))) %>%
+    ##         select(site_code, datetime, q_lps, wy)%>%
+    ##         na.omit()
+
+    con_full <- raw_data_full %>%
+          mutate(wy = as.numeric(as.character(wy))) %>%
+            select(site_code, datetime, con, wy) %>%
+            ## filter(wy < 1975) %>%
+            na.omit()
+
+    #### calculate WRTDS ######
+    flux_annual_wrtds <- calculate_wrtds(
+          chem_df = con_full,
+          q_df = q_df,
+          ws_size = area,
+          lat = lat,
+          long = long,
+          datecol = 'datetime',
+          agg = 'annual',
+          minNumObs = 100,
+          minNumUncen = 50
+         )
 
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
@@ -183,6 +214,13 @@ for(i in 1:length(site_files)){
                        'year:', good_years[k]))
 
         target_year <- as.numeric(as.character(good_years[k]))
+
+        # calculate flag ratios to carry forward
+        flag_df <- carry_flags(raw_q_df = raw_data_q,
+                               raw_con_df = raw_data_con_in,
+                               target_year = target_year,
+                               target_solute = target_solute,
+                               period = 'annual')
 
         raw_data_target_year <- raw_data_full %>%
             mutate(wy = as.numeric(as.character(wy))) %>%
@@ -274,6 +312,7 @@ for(i in 1:length(site_files)){
             }
         }
 
+
         #### congeal fluxes ####
         target_year_out <- tibble(wy = as.character(target_year),
                                   val = c(flux_annual_average,
@@ -299,3 +338,4 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
+
