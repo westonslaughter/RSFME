@@ -7,6 +7,9 @@
 /streamlined/out_ms/*
 /streamlined/out/*
 
+out
+data
+
 !/data/general
 data/
 streamlined/out/

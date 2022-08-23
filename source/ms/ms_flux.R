@@ -6,6 +6,7 @@ library(here)
 library(RiverLoad)
 library(stringr)
 library(tidyverse)
+library(lfstat)
 
 source('source/usgs_helpers.R')
 source('source/helper_functions.R')

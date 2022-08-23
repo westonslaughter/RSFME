@@ -578,3 +578,5 @@ for(i in 1:nrow(good_list)){
 
     } # end year loop
 } # end site loop
+## fail on :
+##  0167300055
