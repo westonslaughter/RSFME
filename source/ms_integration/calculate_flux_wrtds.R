@@ -120,6 +120,7 @@ for(i in 1:length(site_files)){
         summarize(val = mean(val)) %>%
         mutate(site_code = !!site_code, var = 'con',
                wy = water_year(date, origin = 'usgs')) %>%
+        #select(site_code, datetime = date, var, val, wy) %>%
         select(site_code, datetime = date, con = val, wy) %>%
         na.omit()
 
@@ -129,6 +130,7 @@ for(i in 1:length(site_files)){
         summarize(val = mean(val)) %>%
         mutate(site_code = !!site_code, var = 'q_lps',
                wy = water_year(date, origin = 'usgs')) %>%
+        #select(site_code, datetime = date, var, val, wy) %>%
         select(site_code, datetime = date, q_lps = val, wy) %>%
         na.omit()
 
