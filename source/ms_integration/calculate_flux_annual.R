@@ -5,6 +5,7 @@ library(glue)
 library(lubridate)
 library(EGRET)
 library(macrosheds)
+library(bootstrap)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
@@ -43,7 +44,9 @@ out_frame <- tibble(wy = as.integer(),
                     ms_reccomended = as.integer(),
                     ms_interp_ratio = as.numeric(),
                     ms_status_ratio = as.numeric(),
-                    ms_missing_ratio = as.numeric())
+                    ms_missing_ratio = as.numeric(),
+                    se = as.numeric(),
+                    bias = as.numeric())
 ## i = 2
 ## i = 3
 # Loop through sites #####
@@ -234,7 +237,7 @@ for(i in 1:length(site_files)){
             select(site_code, datetime, con, wy) %>%
             na.omit()
 
-        ### calculate annual flux ######
+        ##### calculate annual flux ######
         chem_df <- con_target_year
         q_df <- q_target_year
 
@@ -247,34 +250,87 @@ for(i in 1:length(site_files)){
             mutate(flux = con*q_lps*3.154e+7*(1/area)*1e-6) %>%
             pull(flux)
 
+        ###### error estimation ######
+
+        n_index <- raw_data_target_year %>%
+            arrange(datetime) %>%
+            mutate(index = row_number(datetime)) %>%
+            select(con, index) %>%
+            na.omit() %>%
+            pull(index)
+
+        n = length(n_index)
+
+        theta <- function(x, n_index, raw_data_target_year){
+
+            flux_annual_average <- raw_data_target_year[n_index[x],] %>%
+                group_by(wy) %>%
+                summarize(q_lps = mean(q_lps, na.rm = TRUE),
+                          con = mean(con, na.rm = TRUE)) %>%
+                # multiply by seconds in a year, and divide my mg to kg conversion (1M)
+                mutate(flux = con*q_lps*3.154e+7*(1/area)*1e-6) %>%
+                pull(flux)
+            return(flux_annual_average)
+        }
+        flux_annual_average_jack <- jackknife(1:n,theta, n_index, raw_data_target_year)
+
 
         #### calculate period weighted #####
         flux_annual_pw <- calculate_pw(chem_df, q_df, datecol = 'datetime')
 
+        ###### error estimation ######
+        n = nrow(chem_df)
+        theta <- function(x, chem_df, q_df){calculate_pw(chem_df[x,], q_df, datecol = 'datetime') }
+        flux_annual_pw_jack <- jackknife(1:n,theta, chem_df, q_df)
+
+
         #### calculate beale ######
         flux_annual_beale <- calculate_beale(chem_df, q_df, datecol = 'datetime')
+
+        ###### error estimation ######
+        n = nrow(chem_df)
+        theta <- function(x, chem_df, q_df){calculate_beale(chem_df[x,], q_df, datecol = 'datetime') }
+        flux_annual_beale_jack <- jackknife(1:n,theta, chem_df, q_df)
 
         #### calculate rating #####
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
+        ###### error estimation ######
+        n = nrow(chem_df)
+        theta <- function(x, chem_df, q_df){calculate_rating(chem_df[x,], q_df, datecol = 'datetime') }
+        flux_annual_rating_jack <- jackknife(1:n,theta, chem_df, q_df)
+
         #### calculate WRTDS ######
-        flux_annual_wrtds <- calculate_wrtds(
-          chem_df = chem_df,
-          q_df = q_df,
-          ws_size = area,
-          lat = lat,
-          long = long,
-          datecol = 'datetime')
+
+        # put agg here
 
         #### calculate composite ######
-        rating_filled_df <- generate_residual_corrected_cote(wy = watn(chem_df = chem_df,
+        rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = q_df,
                                                             datecol = 'datetime',
                                                             sitecol = 'site_code')
 
         # calculate annual flux from composite
         flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
-        
+
+
+        ###### error estimation ######
+        n = nrow(chem_df)
+        theta <- function(x, chem_df, q_df){
+            #### calculate composite ######
+
+            rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df[-x,],
+                                                                q_df = q_df,
+                                                                datecol = 'datetime',
+                                                                sitecol = 'site_code')
+            #if(!is.logical(rating_filled_df)){
+            out <- calculate_composite_from_rating_filled_df(rating_filled_df)
+            return(out$flux[1])
+            #}else{return(NA)}
+
+        }
+        flux_annual_comp_jack <- jackknife(1:n,theta, chem_df, q_df)
+
         #### select MS favored ####
         paired_df <- q_df %>%
             full_join(chem_df, by = c('datetime', 'site_code', 'wy')) %>%
@@ -312,6 +368,9 @@ for(i in 1:length(site_files)){
             }
         }
 
+        # placeholder for testing
+        flux_annual_wrtds = 99999
+        flux_annual_wrtds_jack = tibble(jack.se = 9999, jack.bias = 9999)
 
         #### congeal fluxes ####
         target_year_out <- tibble(wy = as.character(target_year),
@@ -325,7 +384,31 @@ for(i in 1:length(site_files)){
                             var = !!target_solute,
                             method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite')) %>%
             mutate(ms_recommended = ifelse(method == !!ideal_method, 1, 0))
-        out_frame <- rbind(out_frame, target_year_out)
+
+        #### congeal SE ####
+        target_year_out_jack <- tibble(wy = as.character(target_year),
+                                  se = c(flux_annual_average_jack$jack.se,
+                                          flux_annual_pw_jack$jack.se,
+                                          flux_annual_beale_jack$jack.se,
+                                          flux_annual_rating_jack$jack.se,
+                                          flux_annual_wrtds_jack$jack.se,
+                                          flux_annual_comp_jack$jack.se),
+                                  bias = c(flux_annual_average_jack$jack.bias,
+                                         flux_annual_pw_jack$jack.bias,
+                                         flux_annual_beale_jack$jack.bias,
+                                         flux_annual_rating_jack$jack.bias,
+                                         flux_annual_wrtds_jack$jack.bias,
+                                         flux_annual_comp_jack$jack.bias),
+                                  site_code = !!site_code,
+                                  var = !!target_solute,
+                                  method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite'))
+
+        #### add to output ####
+        target_year_out_combined <- target_year_out %>%
+            left_join(., target_year_out_jack, by = 'method')
+
+        out_frame <- rbind(out_frame, target_year_out_combined)
+
 
         } # end year loop
     } # end solute loop
