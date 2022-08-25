@@ -8,6 +8,15 @@ library(macrosheds)
 library(foreach)
 library(doParallel)
 
+ncores <- detectCores()
+
+if(.Platform$OS.type == "windows"){
+    cl <- makeCluster(ncores, type = 'PSOCK')
+} else {
+    cl <- makeCluster(ncores, type = 'FORK')
+}
+registerDoParallel(cl)
+
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
 source('ms_overwrites.R')
@@ -35,23 +44,27 @@ site_files  <- list.files(here(data_dir, 'discharge'), recursive = F)
 ## site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
-logfile = '~/log.txt' #log to a file (necessary for receiving output from parallel processes)
+logfile <- '~/log.txt' #log to a file (necessary for receiving output from parallel processes)
 #logfile = stdout() #log to console as usual
 
-# df to populate with annual flux values by method
-out_frame <- tibble(wy = as.integer(),
-                    site_code = as.character(),
-                    var = as.character(),
-                    val = as.numeric(),
-                    method = as.character(),
-                    ms_reccomended = as.integer(),
-                    ms_interp_ratio = as.numeric(),
-                    ms_status_ratio = as.numeric(),
-                    ms_missing_ratio = as.numeric())
+## initializing loop output doesn't work in a parallel framework, since the initialized object
+## is only accessible to the parent process
+#   # df to populate with annual flux values by method
+#   out_frame <- tibble(wy = as.integer(),
+#                       site_code = as.character(),
+#                       var = as.character(),
+#                       val = as.numeric(),
+#                       method = as.character(),
+#                       ms_reccomended = as.integer(),
+#                       ms_interp_ratio = as.numeric(),
+#                       ms_status_ratio = as.numeric(),
+#                       ms_missing_ratio = as.numeric())
+
 ## i = 2
 ## i = 3
 # Loop through sites #####
-for(i in 1:length(site_files)){
+#for(i in 1:length(site_files)){
+out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
 
     site_file <- site_files[i]
     site_code <- strsplit(site_file, split = '.feather')[[1]]
@@ -97,7 +110,8 @@ for(i in 1:length(site_files)){
   ## Loop through solutes at site #####
   ## j = 1
   ## j = 20
-  for(j in 1:length(solutes)){
+  #for(j in 1:length(solutes)){
+  foreach(j = 1:length(solutes), .combine = bind_rows) %do% {
 
     writeLines(paste("site:", site_code,
                      "var:", solutes[j]),
@@ -219,9 +233,7 @@ for(i in 1:length(site_files)){
     ### Loop through good years #####
 
     # for(k in 1:length(good_years)){
-    cl = makeCluster(detectCores())
-    registerDoParallel(cl)
-    out_frame <- foreach(k = 1:length(good_years), .combine = bind_rows) %dopar% {
+    foreach(k = 1:length(good_years), .combine = bind_rows) %dopar% {
 
       writeLines(paste("site:", site_code,
                        'year:', good_years[k]),
@@ -344,9 +356,6 @@ for(i in 1:length(site_files)){
         return(target_year_out)
 
         } # end year loop
-
-    stopCluster(cl)
-
     } # end solute loop
 
     directory <- glue(data_dir,'stream_flux/')
@@ -357,3 +366,5 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
+
+stopCluster(cl)
