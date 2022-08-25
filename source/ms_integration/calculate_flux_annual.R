@@ -5,6 +5,8 @@ library(glue)
 library(lubridate)
 library(EGRET)
 library(macrosheds)
+library(foreach)
+library(doParallel)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
@@ -29,10 +31,12 @@ site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 # data_dir <-  ms_download_core_data(ms_root)
 
 ms_root <- 'data/ms/'
-site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_files  <- list.files(here(data_dir, 'discharge'), recursive = F)
 ## site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
+logfile = '~/log.txt' #log to a file (necessary for receiving output from parallel processes)
+#logfile = stdout() #log to console as usual
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -55,14 +59,16 @@ for(i in 1:length(site_files)){
     area <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(ws_area_ha)
-    # TODO: make the X and Y pulls below work on site_info from macrosheds retrieval func
+
     lat <- site_info %>%
         filter(site_code == !!site_code) %>%
-        pull(Y)
+        select(any_of(c('Y', 'latitude'))) %>%
+        pull()
 
     long <- site_info %>%
         filter(site_code == !!site_code) %>%
-        pull(X)
+        select(any_of(c('X', 'longitude'))) %>%
+        pull()
 
     # read in chemistry data
     raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
@@ -86,14 +92,16 @@ for(i in 1:length(site_files)){
         unique() %>%
         pull(var)
 
-  writeLines(paste("FLUX CALCS:", site_code))
+  writeLines(paste("FLUX CALCS:", site_code), con = logfile)
 
   ## Loop through solutes at site #####
   ## j = 1
   ## j = 20
   for(j in 1:length(solutes)){
+
     writeLines(paste("site:", site_code,
-                     "var:", solutes[j]))
+                     "var:", solutes[j]),
+               con = logfile)
 
     #set to target solute
     target_solute <- solutes[j]
@@ -107,7 +115,8 @@ for(i in 1:length(site_files)){
 
     # read out conversions
     writeLines(paste("\n  unit conversion for", target_solute,
-                     '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'))
+                     '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'),
+               con = logfile)
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0,
@@ -208,10 +217,15 @@ for(i in 1:length(site_files)){
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
     ### Loop through good years #####
-    for(k in 1:length(good_years)){
+
+    # for(k in 1:length(good_years)){
+    cl = makeCluster(detectCores())
+    registerDoParallel(cl)
+    out_frame <- foreach(k = 1:length(good_years), .combine = bind_rows) %dopar% {
 
       writeLines(paste("site:", site_code,
-                       'year:', good_years[k]))
+                       'year:', good_years[k]),
+                 con = logfile)
 
         target_year <- as.numeric(as.character(good_years[k]))
 
@@ -274,7 +288,7 @@ for(i in 1:length(site_files)){
 
         # calculate annual flux from composite
         flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
-        
+
         #### select MS favored ####
         paired_df <- q_df %>%
             full_join(chem_df, by = c('datetime', 'site_code', 'wy')) %>%
@@ -325,9 +339,14 @@ for(i in 1:length(site_files)){
                             var = !!target_solute,
                             method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite')) %>%
             mutate(ms_recommended = ifelse(method == !!ideal_method, 1, 0))
-        out_frame <- rbind(out_frame, target_year_out)
+
+        # out_frame <- rbind(out_frame, target_year_out)
+        return(target_year_out)
 
         } # end year loop
+
+    stopCluster(cl)
+
     } # end solute loop
 
     directory <- glue(data_dir,'stream_flux/')
@@ -338,4 +357,3 @@ for(i in 1:length(site_files)){
                       s = site_code)
 write_feather(out_frame, file_path)
 } # end site loop
-
