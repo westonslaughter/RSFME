@@ -399,8 +399,6 @@ for(i in 1:length(site_files)){
                                          flux_annual_rating_jack$jack.bias,
                                          flux_annual_wrtds_jack$jack.bias,
                                          flux_annual_comp_jack$jack.bias),
-                                  site_code = !!site_code,
-                                  var = !!target_solute,
                                   method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite'))
 
         #### add to output ####
@@ -408,7 +406,6 @@ for(i in 1:length(site_files)){
             left_join(., target_year_out_jack, by = 'method')
 
         out_frame <- rbind(out_frame, target_year_out_combined)
-
 
         } # end year loop
     } # end solute loop
