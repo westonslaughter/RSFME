@@ -290,6 +290,8 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
             filter(q_lps > 0,
                    is.finite(q_lps))
 
+        if(nrow(paired_df) <= 2){return(NA)}else{
+
         q_log <- log10(paired_df$q_lps)
         c_log <- log10(paired_df$con)
         model_data <- tibble(c_log, q_log) %>%
@@ -318,12 +320,15 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
         rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
         return(rating_filled_df)
         }
+        }
 
 ##### calculate monthly flux from composite ####
 calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no = 'site_no', period = NULL){
 
         if(is.null(period)){
-        flux_from__comp <- rating_filled_df %>%
+        flux_from_comp <- rating_filled_df %>%
+            select(datetime, con_com, q_lps, wy) %>%
+            na.omit() %>%
             mutate(flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
             group_by(wy) %>%
           summarize(flux = sum(flux)) %>%
@@ -331,7 +336,7 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         }else{
 
         if(period == 'month'){
-            flux_from__comp <- rating_filled_df %>%
+            flux_from_comp <- rating_filled_df %>%
                 mutate(month = month(datetime),
                        flux = con_com*q_lps*86400*(1/area)*1e-6) %>%
                 group_by(wy, month) %>%
@@ -340,7 +345,7 @@ calculate_composite_from_rating_filled_df <- function(rating_filled_df, site_no 
         }
         }
 
-        return(flux_from__comp)
+        return(flux_from_comp)
         }
 
 # functions for adapt_ms_egret
