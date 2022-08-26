@@ -91,6 +91,8 @@ for(i in 1:length(site_files)){
   ## Loop through solutes at site #####
   ## j = 1
   ## j = 20
+  ## j = 5 # Ca
+  ## j = 27 # SpCond
   for(j in 1:length(solutes)){
     writeLines(paste("site:", site_code,
                      "var:", solutes[j]))
@@ -101,7 +103,7 @@ for(i in 1:length(site_files)){
     # convert all solutes to mg/L
     solute_name <- ms_drop_var_prefix(target_solute)
     solute_default_unit <- var_info[var_info$variable_code == solute_name,] %>%
-      filter(variable_type == 'chem_discrete') %>%
+      filter(variable_type %in% c('chem_discrete', 'chem_mix')) %>%
       ## filter(chem_category == 'stream_conc') %>%
       pull(unit)
 
@@ -110,15 +112,15 @@ for(i in 1:length(site_files)){
                      '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'))
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
-        filter(ms_interp == 0,
-               val > 0) %>%
-      filter(var == target_solute) %>%
-        # conver units from macrosheds default to g/L
-        ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "mg/l",
-                       macrosheds_root = ms_root) %>%
-        select(datetime, val, val_err) %>%
-        tidyr::drop_na(datetime, val)
+              filter(ms_interp == 0,
+                     val > 0) %>%
+              filter(var == target_solute) %>%
+              # conver units from macrosheds default to g/L
+              ms_conversions(convert_units_from = tolower(solute_default_unit),
+                                        convert_units_to = "mg/l",
+                             macrosheds_root = ms_root) %>%
+              select(datetime, val, val_err) %>%
+              tidyr::drop_na(datetime, val)
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
@@ -258,16 +260,16 @@ for(i in 1:length(site_files)){
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
         #### calculate WRTDS ######
-        flux_annual_wrtds <- calculate_wrtds(
-          chem_df = chem_df,
-          q_df = q_df,
-          ws_size = area,
-          lat = lat,
-          long = long,
-          datecol = 'datetime')
+        ## flux_annual_wrtds <- calculate_wrtds(
+        ##   chem_df = chem_df,
+        ##   q_df = q_df,
+        ##   ws_size = area,
+        ##   lat = lat,
+        ##   long = long,
+        ##   datecol = 'datetime')
 
         #### calculate composite ######
-        rating_filled_df <- generate_residual_corrected_cote(wy = watn(chem_df = chem_df,
+        rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = q_df,
                                                             datecol = 'datetime',
                                                             sitecol = 'site_code')
@@ -319,15 +321,26 @@ for(i in 1:length(site_files)){
                                           flux_annual_pw,
                                           flux_annual_beale,
                                           flux_annual_rating,
-                                          flux_annual_wrtds,
+                                          ## flux_annual_wrtds,
                                           flux_annual_comp$flux[1]),
                             site_code = !!site_code,
                             var = !!target_solute,
-                            method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite')) %>%
+                            method = c('average', 'pw', 'beale', 'rating', 'composite')) %>%
             mutate(ms_recommended = ifelse(method == !!ideal_method, 1, 0))
         out_frame <- rbind(out_frame, target_year_out)
 
         } # end year loop
+
+        wrtds_out <- flux_annual_wrtds %>%
+          filter(wy %in% good_years) %>%
+          rename(val = flux) %>%
+          mutate(site_code = site_code,
+                 var = solutes[j],
+                 method = 'wrtds',
+                 ms_recommended = 0)
+
+        out_frame <- rbind(out_frame, wrtds_out) %>%
+          arrange(desc(method), desc(wy))
     } # end solute loop
 
     directory <- glue(data_dir,'stream_flux/')
@@ -336,6 +349,6 @@ for(i in 1:length(site_files)){
     }
     file_path <- glue('{directory}/{s}.feather',
                       s = site_code)
-write_feather(out_frame, file_path)
+  write_feather(out_frame, file_path)
 } # end site loop
 
