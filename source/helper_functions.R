@@ -226,7 +226,7 @@ dt_to_wy_quarter <- function(datetime) {
              year_con_df <- raw_con_df %>%
                  mutate(wy = water_year(datetime, origin = 'usgs')) %>%
                  filter(wy == target_year,
-                        var == target_solute)
+                        target_solute == target_solute)
 
              con_tbl <- tibble(wy = target_year, var = target_solute,
                                ms_interp = calc_interp_ratio(trimmed_df = year_con_df, period = period),
@@ -253,7 +253,7 @@ dt_to_wy_quarter <- function(datetime) {
              year_con_df <- raw_con_df %>%
                  mutate(wy = water_year(datetime, origin = 'usgs')) %>%
                  filter(wy == target_year,
-                        var == target_solute)
+                        target_solute == target_solute)
 
             ms_interp = calc_interp_ratio(trimmed_df = year_con_df, period = period)
             ms_status = calc_status_ratio(trimmed_df = year_con_df, period = period)
