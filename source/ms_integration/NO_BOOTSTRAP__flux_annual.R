@@ -8,12 +8,17 @@ library(macrosheds)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
+source('ms_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
-data_dir <- here('streamlined/data/ms/hbef/')
-site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+data_dir <- here('data/ms/')
+
+hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
+## site_files <- c(hbef_files, hj_files)
+
+site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -25,8 +30,28 @@ out_frame <- tibble(wy = as.integer(),
                     ms_interp_ratio = as.numeric(),
                     ms_status_ratio = as.numeric(),
                     ms_missing_ratio = as.numeric())
-## i = 2
+## i = 1
 # Loop through sites #####
+hbef_dir <- here('data/ms/hbef/')
+hj_dir <- here('data/ms/hjandrews/')
+
+choices <- c('hjandrews')
+
+for(choice in choices) {
+  if(choice == 'hbef') {
+    data_dir <- hbef_dir
+    site_files <- hbef_files
+  } else if(choice == 'hjandrews') {
+    data_dir <- hj_dir
+    site_files <- hj_files
+  }
+}
+
+# read in variables data
+ms_flux_vars <- ms_download_variables() %>%
+  filter(flux_convertible == 1) %>%
+  pull(variable_code)
+
 for(i in 1:length(site_files)){
 
     site_file <- site_files[i]
@@ -34,19 +59,24 @@ for(i in 1:length(site_files)){
 
     area <- site_info %>%
         filter(site_code == !!site_code) %>%
+        distinct() %>%
         pull(ws_area_ha)
 
     lat <- site_info %>%
         filter(site_code == !!site_code) %>%
+        distinct() %>%
         pull(Y)
 
     long <- site_info %>%
         filter(site_code == !!site_code) %>%
+        distinct() %>%
         pull(X)
 
     # read in chemistry data
     raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
-        filter(ms_interp == 0)
+      filter(ms_interp == 0,
+             # dropping all vars that are not marked as 'flux convertible'
+             ms_drop_var_prefix(var) %in% ms_flux_vars)
 
     # read in discharge data
     raw_data_q <- read_feather(here(glue(data_dir, '/discharge/', site_code, '.feather')))
@@ -82,6 +112,9 @@ for(i in 1:length(site_files)){
         select(datetime, val) %>%
         na.omit()
 
+    # if site has no data for var, skip to next var
+    if(nrow(raw_data_con) == 0) next
+
     # find acceptable years
     q_check <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
@@ -114,16 +147,20 @@ for(i in 1:length(site_files)){
     daily_data_con <- raw_data_con %>%
         mutate(date = date(datetime)) %>%
         group_by(date) %>%
-        summarize(val = mean(val)) %>%
+        summarize(val = mean_or_x(val)) %>%
         mutate(site_code = !!site_code, var = 'con') %>%
         select(site_code, datetime = date, var, val)
 
     daily_data_q <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
         group_by(date) %>%
-        summarize(val = mean(val)) %>%
+        summarize(val = mean_or_x(val)) %>%
         mutate(site_code = !!site_code, var = 'q_lps') %>%
         select(site_code, datetime = date, var, val)
+
+    q_df <- daily_data_q %>%
+      pivot_wider(names_from = var,
+                  values_from = val)
 
     raw_data_full <- rbind(daily_data_con, daily_data_q) %>%
         pivot_wider(names_from = var, values_from = val, id_cols = c(site_code, datetime)) %>%
@@ -137,9 +174,11 @@ for(i in 1:length(site_files)){
             na.omit()
 
     #### calculate WRTDS ######
-    flux_annual_wrtds <- calculate_wrtds(
+    tryCatch(
+      expr = {
+        flux_annual_wrtds <- calculate_wrtds(
           chem_df = con_full,
-          q_df = daily_data_q,
+          q_df = q_df,
           ws_size = area,
           lat = lat,
           long = long,
@@ -148,6 +187,33 @@ for(i in 1:length(site_files)){
           minNumObs = 100,
           minNumUncen = 50
          )
+      },
+      error = function(e) {
+        writeLines(paste('\nWRTDS run failed for \n     site', site_code,
+                         '\n     variable', target_solute, '\n WRTDS TRYING AGAIN'))
+        tryCatch(
+          expr = {
+            flux_annual_wrtds <- calculate_wrtds(
+                   chem_df = con_full,
+                   q_df = q_df,
+                   ws_size = area,
+                   lat = lat,
+                   long = long,
+                   datecol = 'datetime',
+                   agg = 'annual',
+                   minNumObs = 100,
+                   minNumUncen = 50
+            )
+          },
+          error = function(e) {
+            print("WRTDS failed, setting to NA")
+            flux_annual_wrtds <- NA
+          }
+        )
+
+        ## next
+      }
+    )
 
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
@@ -206,17 +272,6 @@ for(i in 1:length(site_files)){
         #### calculate rating #####
         flux_annual_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime')
 
-        #### calculate WRTDS ######
-        ## flux_annual_wrtds <- calculate_wrtds(
-        ##   chem_df = chem_df,
-        ##   q_df = q_df,
-        ##   ws_size = area,
-        ##   lat = lat,
-        ##   long = long,
-        ##   ## datamode = 'ms',
-        ##   datecol = 'datetime')
-
-
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = q_df,
@@ -240,12 +295,14 @@ for(i in 1:length(site_files)){
                    is.finite(q_log))%>%
             na.omit()
 
+        # ``model_data`` is the site-variable-year dataframe of Q and concentration
+        # log-log rating curve of C by Q
         rating <- summary(lm(model_data$c_log ~ model_data$q_log, singular.ok = TRUE))
-
+        # R^2 value of rating curve
         r_squared <- rating$r.squared
-
+        # auto-correlation of residuals of rating curve
         resid_acf <- abs(acf(rating$residuals, lag.max = 1, plot = FALSE)$acf[2])
-
+        # auto-correlation of concentration data
         con_acf <- abs(acf(paired_df$con, lag.max = 1, plot = FALSE)$acf[2])
 
         # modified from figure 10 of Aulenbach et al 2016
@@ -296,6 +353,7 @@ for(i in 1:length(site_files)){
     if(!dir.exists(directory)){
         dir.create(directory, recursive = TRUE)
     }
+
     file_path <- glue('{directory}/{s}.feather',
                       s = site_code)
 
@@ -305,4 +363,9 @@ for(i in 1:length(site_files)){
   write_feather(out_frame, file_path)
 } # end site loop
 
-## w4df <- read_feather('data/ms/hbef/stream_flux/w4.feather')
+## w3 <- read_feather('data/ms/hbef/stream_flux/w3.feather')
+  ## filter(var == 'GN_DOC') %>%
+  ## pivot_wider(id_cols = c('site_code', 'wy', 'var'),
+  ##             values_from = val,
+  ##             names_from = c('method'))
+}
