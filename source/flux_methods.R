@@ -30,6 +30,10 @@ prep_raw_for_riverload <- function(chem_df, q_df, datecol = 'date'){
 calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
   rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
 
+  if(is.na(rl_data[1,2])){
+      rl_data <- rl_data[-1,]
+  }
+
   if(is.null(period)){
   flux_from_pw <- method1(rl_data, ncomp = 1) %>%
     sum(.)/(1000*area)
@@ -116,6 +120,7 @@ calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
               return(method1)
           }
           else if (period == "year") {
+              notNA <- na.omit(db)
               new <- notNA
               new$newdate <- format(as.POSIXct(new$datetime), format = "%Y")
               maximum <- length(unique(new$newdate))
@@ -201,6 +206,10 @@ calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
 ###### calculate beale ######
 calculate_beale <- function(chem_df, q_df, datecol = 'date', period = NULL){
     rl_data <- prep_raw_for_riverload(chem_df = chem_df, q_df = q_df, datecol = datecol)
+
+    if(is.na(rl_data[1,2])){
+        rl_data <- rl_data[-1,]
+    }
 
     if(is.null(period)){
     flux_from_beale <- beale.ratio(rl_data, ncomp = 1) %>%
@@ -306,6 +315,8 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
         slope <- rating$coefficients[2]
 
         # create modeled c, calc residuals, adjust modeled c by interpolated residuals
+        site_code <- paired_df$site_code[[1]]
+
         rating_filled_df <- q_df %>%
           mutate(con_reg = 10^(intercept+(slope*log10(q_lps)))) %>%
           select(all_of(datecol), con_reg, q_lps) %>%
@@ -314,7 +325,7 @@ generate_residual_corrected_con <- function(chem_df, q_df, datecol = 'date', sit
             mutate(res = con_reg-con,
                    res = imputeTS::na_interpolation(res),
                    con_com = con_reg-res,
-                   site_code = !!get(sitecol),
+                   site_code = !!site_code,
                    wy = water_year(get(datecol), origin = 'usgs'))
 
         rating_filled_df$con_com[!is.finite(rating_filled_df$con_com)] <- 0
