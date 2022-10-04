@@ -558,7 +558,6 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
         ms_vars <- macrosheds::ms_download_variables()
         site_code <- unique(stream_chemistry$site_code)
 
-
         #### Prep Files ####
 
         if(prep_data){
@@ -746,6 +745,12 @@ adapt_ms_egret <- function(chem_df, q_df, ws_size, lat, long,
         var_unit <- ms_vars %>%
             filter(variable_code == !!var) %>%
             pull(unit)
+
+      if(length(var_unit) == 0) {
+        print("length of var_unit for this flux calc is zero, setting var_unit to NA")
+        var_unit <- NA
+      }
+
         site_lat <- site_data %>%
             filter(site_code == !!site_code) %>%
             pull('latitude')
