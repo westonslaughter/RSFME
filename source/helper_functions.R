@@ -64,7 +64,8 @@ dt_to_wy_quarter <- function(datetime) {
 }
 
 
- warn_sum <- function(x) {
+ old_warn_sum <- function(x) {
+   # use to sitll get data with NAs and Infs
    # length of record
    n_x <- length(x)
 
@@ -97,7 +98,30 @@ dt_to_wy_quarter <- function(datetime) {
    return(xsum)
  }
 
- ##### calculate ms_interp #####
+ warn_sum <- function(x) {
+   # length of record
+   n_x <- length(x)
+
+     # number of NAs in record
+     n_na <- length(x[is.na(x)])
+      # number of inf values in record
+      n_inf <- length(x[is.infinite(x)])
+
+      # warn user
+      writeLines(paste("WARNING: infinite values found in flux record, ignoring during SUM",
+                       "\n count NA:", n_na,
+                       "\n count Inf:", n_inf))
+
+
+      xsum <- sum(x[!is.infinite(x)], na.rm = TRUE)
+      return(xsum)
+ }
+
+# run flux by site, year(s), method
+
+## ms_run_flux <- function(site, )
+
+##### calculate ms_interp #####
 
  carry_flags <- function(raw_q_df, raw_con_df, target_solute = NULL, target_year = NULL, period = NULL){
     #### set up ratio functions #####
