@@ -52,7 +52,7 @@ ms_flux_vars <- ms_download_variables() %>%
   filter(flux_convertible == 1) %>%
   pull(variable_code)
 
-for(i in 1:length(site_files)){
+for(i in 5:length(site_files)){
 
     site_file <- site_files[i]
     site_code <- strsplit(site_file, split = '.feather')[[1]]
@@ -73,7 +73,8 @@ for(i in 1:length(site_files)){
         pull(X)
 
     # read in chemistry data
-    raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+  raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+    # NOTE: is there only temp data at GS Watershed 3?
       filter(ms_interp == 0,
              # dropping all vars that are not marked as 'flux convertible'
              ms_drop_var_prefix(var) %in% ms_flux_vars)
@@ -91,6 +92,10 @@ for(i in 1:length(site_files)){
         select(var) %>%
         unique() %>%
         pull(var)
+
+  if(length(solutes) == 0) {
+    writeLines(glue("\n\n no flux convertible solutes in stream chemistry data for {site}", site = site_code))
+  }
 
   writeLines(paste("FLUX CALCS:", site_code))
 
@@ -306,6 +311,7 @@ for(i in 1:length(site_files)){
         con_acf <- abs(acf(paired_df$con, lag.max = 1, plot = FALSE)$acf[2])
 
         # modified from figure 10 of Aulenbach et al 2016
+      if(!is.nan(r_squared)) {
         if(r_squared > 0.3){
             if(resid_acf > 0.2){
                 ideal_method <- 'composite'
@@ -319,6 +325,10 @@ for(i in 1:length(site_files)){
                 ideal_method <- 'average'
             }
         }
+      } else {
+        writeLines("\n\n ideal method error: r_squared value was NaN, ideal method set to NA\n\n")
+        ideal_method <- NA
+      }
 
 
         #### congeal fluxes ####
