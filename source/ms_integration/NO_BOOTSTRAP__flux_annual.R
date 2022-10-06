@@ -13,9 +13,10 @@ source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
 data_dir <- here('data/ms/')
+## site_files  <- list.files(data_dir, recursive = F)
 
-hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
+## hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+## hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
 ## site_files <- c(hbef_files, hj_files)
 
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
@@ -32,27 +33,38 @@ out_frame <- tibble(wy = as.integer(),
                     ms_missing_ratio = as.numeric())
 ## i = 1
 # Loop through sites #####
-hbef_dir <- here('data/ms/hbef/')
-hj_dir <- here('data/ms/hjandrews/')
+## hbef_diTopic: Weston Slaughter's Personal Meeting Room
 
-choices <- c('hjandrews')
+r <- here('data/ms/hbef/')
+## hj_dir <- here('data/ms/hjandrews/')
 
-for(choice in choices) {
-  if(choice == 'hbef') {
-    data_dir <- hbef_dir
-    site_files <- hbef_files
-  } else if(choice == 'hjandrews') {
-    data_dir <- hj_dir
-    site_files <- hj_files
-  }
-}
+## choices <- c('hjandrews')
+
+## for(choice in choices) {
+##   if(choice == 'hbef') {
+##     data_dir <- hbef_dir
+##     site_files <- hbef_files
+##   } else if(choice == 'hjandrews') {
+##     data_dir <- hj_dir
+##     site_files <- hj_files
+##   }
+## }
+
+# list all networks
+networks <- list.files(data_dir, recursive = F)
+networks <- networks[!networks %in% c("hbef", "hjandrews")]
 
 # read in variables data
 ms_flux_vars <- ms_download_variables() %>%
   filter(flux_convertible == 1) %>%
   pull(variable_code)
 
-for(i in 5:length(site_files)){
+for(nwk in networks){
+
+  data_dir <- here(glue('data/ms/{network}', network = nwk))
+  site_files  <- list.files(glue('data/ms/{network}/discharge', network = nwk), recursive = F)
+
+  for(i in 1:length(site_files)){
 
     site_file <- site_files[i]
     site_code <- strsplit(site_file, split = '.feather')[[1]]
@@ -94,7 +106,11 @@ for(i in 5:length(site_files)){
         pull(var)
 
   if(length(solutes) == 0) {
-    writeLines(glue("\n\n no flux convertible solutes in stream chemistry data for {site}", site = site_code))
+    writeLines(
+      glue("\n\n no flux convertible solutes in stream chemistry data for {site}", site = site_code),
+      "\n   skipping to next site\n"
+      )
+    next
   }
 
   writeLines(paste("FLUX CALCS:", site_code))
@@ -123,7 +139,8 @@ for(i in 5:length(site_files)){
     # find acceptable years
     q_check <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
-        filter(ms_interp == 0) %>%
+        # NOTE: should we filter out NAs?
+        filter(ms_interp == 0, !is.na(val)) %>%
         distinct(., date, .keep_all = TRUE) %>%
         mutate(water_year = water_year(datetime, origin = "usgs")) %>%
         group_by(water_year) %>%
@@ -132,6 +149,8 @@ for(i in 5:length(site_files)){
 
     conc_check <- raw_data_con %>%
         mutate(date = date(datetime)) %>%
+        # NOTE: should we filter out NAs?
+        filter(!is.na(val)) %>%
         distinct(., date, .keep_all = TRUE) %>%
         mutate(water_year = water_year(date, origin = "usgs"),
                quart = quarter(date)) %>%
@@ -141,12 +160,28 @@ for(i in 5:length(site_files)){
         filter(n >= 4,
                count > 3)
 
+
     q_good_years <- q_check$water_year
     conc_good_years <- conc_check$water_year
 
     # 'good years' where Q and Chem data both meet min requirements
     good_years <- q_good_years[q_good_years %in% conc_good_years]
     n_yrs <- length(good_years)
+
+    # NOTE: adding handling if concentration data fails conc check
+    if(nrow(conc_check) < 1) {
+      writeLines(glue("{site} concentration data insufficient sample size and frequency to warrant flux estimation",
+                      "\n   no water years in {site} dataset with minimum standards met", site = site_code))
+      next
+    } else if(nrow(q_check) < 1) {
+      writeLines(glue("{site} discharge data insufficient sample size and frequency to warrant flux estimation",
+                      "\n   no water years in {site} dataset with minimum standards met", site = site_code))
+      next
+    } else if(length(good_years) == 0) {
+      writeLines(glue("no water years where q data and concentration data both meet minimum standards",
+                      "skipping site: {site}", site = site_code))
+      next
+    }
 
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
