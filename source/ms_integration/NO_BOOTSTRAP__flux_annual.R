@@ -15,9 +15,9 @@ source('source/usgs_helpers.R')
 data_dir <- here('data/ms/')
 ## site_files  <- list.files(data_dir, recursive = F)
 
-## hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-## hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
-## site_files <- c(hbef_files, hj_files)
+hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
+site_files <- c(hbef_files, hj_files)
 
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 
@@ -35,24 +35,25 @@ out_frame <- tibble(wy = as.integer(),
 # Loop through sites #####
 ## hbef_diTopic: Weston Slaughter's Personal Meeting Room
 
-r <- here('data/ms/hbef/')
-## hj_dir <- here('data/ms/hjandrews/')
+hbef_dir <- here('data/ms/hbef/')
+hj_dir <- here('data/ms/hjandrews/')
 
-## choices <- c('hjandrews')
+choices <- c('hbef')
 
-## for(choice in choices) {
-##   if(choice == 'hbef') {
-##     data_dir <- hbef_dir
-##     site_files <- hbef_files
-##   } else if(choice == 'hjandrews') {
-##     data_dir <- hj_dir
-##     site_files <- hj_files
-##   }
-## }
+for(choice in choices) {
+  if(choice == 'hbef') {
+    data_dir <- hbef_dir
+    site_files <- hbef_files
+  } else if(choice == 'hjandrews') {
+    data_dir <- hj_dir
+    site_files <- hj_files
+  }
+}
 
 # list all networks
-networks <- list.files(data_dir, recursive = F)
-networks <- networks[!networks %in% c("hbef", "hjandrews")]
+## networks <- list.files(data_dir, recursive = F)
+## networks <- networks[!networks %in% c("hbef", "hjandrews", "arctic")]
+## networks <- "hbef"
 
 # read in variables data
 ms_flux_vars <- ms_download_variables() %>%
@@ -60,6 +61,8 @@ ms_flux_vars <- ms_download_variables() %>%
   pull(variable_code)
 
 for(nwk in networks){
+
+  writeLines(paste("\n\n starting annual flux calculations for netowrk:", nwk, "\n\n"))
 
   data_dir <- here(glue('data/ms/{network}', network = nwk))
   site_files  <- list.files(glue('data/ms/{network}/discharge', network = nwk), recursive = F)

@@ -5,11 +5,24 @@ library(grid)
 library(gridExtra)
 library(ggrepel)
 library(lfstat)
+library(tidyverse)
 
 source('./source/flux_methods.R')
 source('./source/helper_functions.R')
 
+# HBEF compile
+hbef_fp <- file.path('data','ms', 'hbef', 'stream_flux')
+hbef_files <- list.files(hbef_fp, full.names = TRUE)
+hbef_df <- do.call(rbind,lapply(hbef_files, read_feather))
 
+# remove duplicates
+hbef <- hbef_df[!(duplicated(hbef_df) | duplicated(hbef_df, fromLast = FALSE)),]
+
+hbef_annual_flux <- hbef %>%
+  pivot_wider(id_cols = c('wy', 'site_code', 'method'),
+              names_from = c('var'),
+              values_from = c('val'))
+write.csv(hbef_annual_flux, "hbef_annual_flux.csv")
 
 # all HBEF
 hbef_ws <- c('w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9')
@@ -797,3 +810,25 @@ hbef_annual_flux_methods <- grid.arrange(
              nrow = 3, ncol = 3,
              top = textGrob(plt_title, gp=gpar(fontsize=26, font=3), vjust = -2),
              vp = viewport(width=0.9, height=0.9))
+
+
+
+# HBEF (NEDVI)
+hbef_veg <- read.csv('~/science/macrosheds/portal/data/general/spatial_downloadables/spatial_timeseries_vegetation.csv') %>%
+  filter(network == 'lter',
+         domain == 'hbef',
+         ## var == c('vb_ndvi_mean', 'vb_ndvi_median', 'vb_ndvi_sd')
+         ) %>%
+  # filter out annual summary, which are all on new years
+  filter(
+    lubridate::month(date) != 1,
+    lubridate::day(date) != 1
+  ) %>%
+  pivot_wider(
+    id_cols = c('network', 'domain', 'site_code', 'date'),
+    names_from = c('var'),
+    values_from = c('val')
+  )
+
+
+write.csv(hbef_veg, 'hbef_timeseries_vegetation.csv')
