@@ -8,6 +8,7 @@ library(RColorBrewer)
 source('source/helper_functions.R')
 source('source/usgs_helpers.R')
 
+# NOTE: seems flux calc sript is ocmppiling sites cumulatively, fix later
 # HBEF Flux Method Comparison
 w6_flux <- read_feather('data/ms/hbef/stream_flux/w6.feather') %>%
   mutate(var = ms_drop_var_prefix(var)) %>%
