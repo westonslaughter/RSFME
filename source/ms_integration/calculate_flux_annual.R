@@ -14,15 +14,15 @@ source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
 # ng
-## data_dir <- here('streamlined/data/ms/hbef/')
+data_dir <- here('streamlined/data/ms/hbef/')
 ## site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
-## site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
 ## var_info <- nick/file/path
 
 # ws
-data_dir <- here('data/ms/hbef/')
+#data_dir <- here('data/ms/hbef/')
 ## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+#site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 ## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
