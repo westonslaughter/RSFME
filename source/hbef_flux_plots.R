@@ -1,5 +1,6 @@
 library(plotly)
 library(ggplot2)
+library(GGally)
 library(dplyr)
 library(tidyr)
 library(feather)
@@ -125,7 +126,7 @@ network = 'lter'
 domain = 'hbef'
 
 for(ws in names(hbef_links)) {
-  plot_fp <- glue('flux_plots/{network}/{domain}/{site}/flux_methods_timeseries/',
+  plot_fp <- glue('flux_plots/{network}/{domain}/{site}/',
                   network = network,
                   domain = domain,
                   site = ws)
@@ -182,6 +183,7 @@ for(ws in names(hbef_links)) {
 
   # for each solute in ws record
   for(solute in fluxes) {
+    # TIMESERIES: site-solute flux methods compare plot
     ws_solute_flux <- ws_flux %>%
       select(wy, site_code, method, !!solute) %>%
       filter(!is.na(!!solute)) %>%
@@ -190,8 +192,22 @@ for(ws in names(hbef_links)) {
       )
 
     site_solute_plot <- flux_compare_plot(ws_solute_flux, ws, solute)
-    site_solute_filename <- glue(plot_fp, '{solute}.png', solute = solute)
+    site_solute_filename <- glue(plot_fp, 'timeseries_{solute}.png', solute = solute)
     ggsave(site_solute_filename, site_solute_plot, bg = 'white')
+
+    # PAIRWISE: method to method regre  p <- ggplot(data = data, mapping = mapping) +
+    site_solute_filename <- glue(plot_fp, 'pairplot_{solute}.svg', solute = solute)
+    svg(site_solute_filename, height = 7, width = 7)
+    ws_pairs <- ws_solute_flux %>%
+      pivot_wider(
+        id_cols = all_of(c('site_code', 'wy')),
+        names_from = method,
+        values_from = solute
+      )
+    ggpairs(ws_pairs, columns = 3:ncol(ws_pairs))
+    print(ws_pairs)
+    dev.off()
+
   }
 
 
