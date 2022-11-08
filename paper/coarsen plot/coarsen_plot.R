@@ -121,13 +121,14 @@ plot_tbl <- out_tbl %>%
            hours = n/4)
 
 plot_tbl %>%
-ggplot(., aes(x = hours, y = error_abs))+
+ggplot(., aes(x = hours, y = estimate))+
+    geom_hline(yintercept = truth$estimate[1])+
     geom_line()+
     geom_point()+
     facet_wrap(vars(method), ncol = 1)+
-    scale_y_reverse(limits = c(100,0)) +
+    #scale_y_reverse(limits = c(100,0)) +
     labs(x = 'Frequency (hours)',
-         y = '|Accuracy|',
+         y = 'Estimate (kg/hr/yr)',
          caption = '15 minute NO3 data from HBEF W3 2016 WY resampled by every nth measurement, compared to truth using every sample and the composite method.
          \n Lines indicate hourly, daily, weekly, biweekly, monthly, and bimonthly intervals.')+
     theme_classic()+
@@ -137,8 +138,9 @@ ggplot(., aes(x = hours, y = error_abs))+
     geom_vline(xintercept = 96)+ #weekly
     geom_vline(xintercept = 192)+ #biweekly
     geom_vline(xintercept = 384)+ #monthly
-    geom_vline(xintercept = 768) #bimonthly
-
+    geom_vline(xintercept = 768)+ #bimonthly
+    annotate('rect', xmin = 0, xmax = 1750,
+             ymin = truth$estimate[1]*.95, ymax = truth$estimate[1]*1.05, fill = 'green', alpha = .1)
 
 
 

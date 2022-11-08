@@ -461,29 +461,34 @@ p6 <- tibble(q = simulated_series[[1]], con = simulated_series[[6]]) %>%
 p6
 
 ### make row 1 plots ####
+ymin = 0
+ymax = .85
+
+ymin_en = 300
+ymax_en = 600
 # unaltered flow w/ chemo data
 p7_data <- loop_out %>%
     filter(flow == 'unaltered',
            cq == 'chemostatic') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p7_data$method <- factor(p7_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p7 <- ggplot(p7_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'unaltered' & loop_out$cq == 'chemostatic'])+
         geom_boxplot()+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))
+    ylim(ymin, ymax)+
 
 p7
 
@@ -492,24 +497,24 @@ p8_data <- loop_out %>%
     filter(flow == 'unaltered',
            cq == 'none') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p8_data$method <- factor(p8_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p8 <- ggplot(p8_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'unaltered' & loop_out$cq == 'none'])+
     geom_boxplot()+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))
+    ylim(ymin, ymax)
 p8
 
 # unaltered flow w/ enrich data
@@ -517,24 +522,26 @@ p9_data <- loop_out %>%
     filter(flow == 'unaltered',
            cq == 'enrich') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p9_data$method <- factor(p9_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p9 <- ggplot(p9_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'unaltered' & loop_out$cq == 'enrich'])+
     geom_boxplot()+
-    ylim(-60, 60)+
+   # ylim(ymin, ymax)+
     geom_hline(aes(yintercept=0))+
     theme_classic()+
     theme(axis.title.x=element_blank(),
                           axis.text.x=element_blank(),
                           axis.title.y = element_blank(),
-          text = element_text(size = 20))
+          text = element_text(size = 20))+
+    ylim(ymin_en, ymax_en)
 p9
 
 ### make row 2 plots ####
@@ -543,24 +550,24 @@ p10_data <- loop_out %>%
     filter(flow == 'storm',
            cq == 'chemostatic') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p10_data$method <- factor(p10_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p10 <- ggplot(p10_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'storm' & loop_out$cq == 'chemostatic'])+
     geom_boxplot()+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))+
-    labs(y = 'Error (%)')
+    ylim(ymin,ymax)+
+    labs(y = 'Load (kg/ha/yr)')
 p10
 
 # storm flow w/ no pattern data
@@ -568,24 +575,25 @@ p11_data <- loop_out %>%
     filter(flow == 'storm',
            cq == 'none') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p11_data$method <- factor(p11_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p11 <- ggplot(p11_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'storm' & loop_out$cq == 'none'])+
     geom_boxplot()+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))
+    ylim(ymin, ymax)
+
 p11
 
 # stormflow w/ enrich data
@@ -593,16 +601,17 @@ p12_data <- loop_out %>%
     filter(flow == 'storm',
            cq == 'enrich') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p12_data$method <- factor(p12_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p12 <- ggplot(p12_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'storm' & loop_out$cq == 'enrich'])+
     geom_boxplot()+
     geom_hline(aes(yintercept=0))+
     theme_classic()+
@@ -610,7 +619,7 @@ p12 <- ggplot(p12_data, aes(x = method, y = error)) +
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)
+    ylim(ymin_en, ymax_en)
 
 p12
 
@@ -620,23 +629,24 @@ p13_data <- loop_out %>%
     filter(flow == 'base',
            cq == 'chemostatic') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p13_data$method <- factor(p13_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p13 <- ggplot(p13_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'base' & loop_out$cq == 'chemostatic'])+
     geom_boxplot()+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
           text = element_text(size = 20))+
-    ylim(-60, 60)+
+    ylim(ymin, ymax)+
     geom_hline(aes(yintercept=0))
 p13
 
@@ -645,20 +655,20 @@ p14_data <- loop_out %>%
     filter(flow == 'base',
            cq == 'none') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p14_data$method <- factor(p14_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p14 <- ggplot(p14_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'base' & loop_out$cq == 'none'])+
     geom_boxplot()+
     theme_classic() +
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))+
+    ylim(ymin, ymax)+
     theme(axis.title.y=element_blank(),
           text = element_text(size = 20)) +
     labs(x = 'Method')
@@ -669,26 +679,27 @@ p15_data <- loop_out %>%
     filter(flow == 'base',
            cq == 'enrich') %>%
     pivot_wider(names_from = method, values_from = estimate, id_cols = runid, values_fn = mean) %>%
-    mutate(pw = ((pw-truth)/truth)*100,
-           beale = ((beale - truth)/truth)*100,
-           rating = ((rating-truth)/truth)*100,
-           composite = ((composite - truth)/truth)*100) %>%
+    # mutate(pw = ((pw-truth)/truth)*100,
+    #        beale = ((beale - truth)/truth)*100,
+    #        rating = ((rating-truth)/truth)*100,
+    #        composite = ((composite - truth)/truth)*100) %>%
     select(-truth, -runid) %>%
     pivot_longer(cols = everything() ,names_to = 'method', values_to = 'error')
 
 p15_data$method <- factor(p15_data$method, levels = c("pw", "beale", "rating", 'composite'))
 
 p15 <- ggplot(p15_data, aes(x = method, y = error)) +
+    geom_hline(yintercept = loop_out$estimate[loop_out$method == 'truth' & loop_out$flow == 'base' & loop_out$cq == 'enrich'])+
     geom_boxplot()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank())+
-    ylim(-60, 60)+
-    geom_hline(aes(yintercept=0))+
     theme_classic()+
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.title.y=element_blank(),
-          text = element_text(size = 20))
+          text = element_text(size = 20))+
+    ylim(ymin_en, ymax_en)
+
 p15
 
 ## make mega fig ####
