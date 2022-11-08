@@ -5,7 +5,18 @@ library(glue)
 library(lubridate)
 library(EGRET)
 library(macrosheds)
+library(foreach)
+library(doParallel)
 library(bootstrap)
+
+ncores <- detectCores()
+
+if(.Platform$OS.type == "windows"){
+    cl <- makeCluster(ncores, type = 'PSOCK')
+} else {
+    cl <- makeCluster(ncores, type = 'FORK')
+}
+registerDoParallel(cl)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
@@ -30,27 +41,31 @@ site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
 # data_dir <-  ms_download_core_data(ms_root)
 
 ms_root <- 'data/ms/'
-site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_files  <- list.files(here(data_dir, 'discharge'), recursive = F)
 ## site_info <- ms_download_site_data()
 var_info <-  ms_download_variables()
 
+logfile <- '~/log.txt' #log to a file (necessary for receiving output from parallel processes)
+#logfile = stdout() #log to console as usual
 
-# df to populate with annual flux values by method
-out_frame <- tibble(wy = as.integer(),
-                    site_code = as.character(),
-                    var = as.character(),
-                    val = as.numeric(),
-                    method = as.character(),
-                    ms_reccomended = as.integer(),
-                    ms_interp_ratio = as.numeric(),
-                    ms_status_ratio = as.numeric(),
-                    ms_missing_ratio = as.numeric(),
-                    se = as.numeric(),
-                    bias = as.numeric())
+## initializing loop output doesn't work in a parallel framework, since the initialized object
+## is only accessible to the parent process
+#   # df to populate with annual flux values by method
+#   out_frame <- tibble(wy = as.integer(),
+#                       site_code = as.character(),
+#                       var = as.character(),
+#                       val = as.numeric(),
+#                       method = as.character(),
+#                       ms_reccomended = as.integer(),
+#                       ms_interp_ratio = as.numeric(),
+#                       ms_status_ratio = as.numeric(),
+#                       ms_missing_ratio = as.numeric())
+
 ## i = 2
 ## i = 3
 # Loop through sites #####
-for(i in 1:length(site_files)){
+#for(i in 1:length(site_files)){
+out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
 
     site_file <- site_files[i]
     site_code <- strsplit(site_file, split = '.feather')[[1]]
@@ -58,14 +73,16 @@ for(i in 1:length(site_files)){
     area <- site_info %>%
         filter(site_code == !!site_code) %>%
         pull(ws_area_ha)
-    # TODO: make the X and Y pulls below work on site_info from macrosheds retrieval func
+
     lat <- site_info %>%
         filter(site_code == !!site_code) %>%
-        pull(Y)
+        select(any_of(c('Y', 'latitude'))) %>%
+        pull()
 
     long <- site_info %>%
         filter(site_code == !!site_code) %>%
-        pull(X)
+        select(any_of(c('X', 'longitude'))) %>%
+        pull()
 
     # read in chemistry data
     raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
@@ -89,16 +106,17 @@ for(i in 1:length(site_files)){
         unique() %>%
         pull(var)
 
-  writeLines(paste("FLUX CALCS:", site_code))
+  writeLines(paste("FLUX CALCS:", site_code), con = logfile)
 
   ## Loop through solutes at site #####
   ## j = 1
   ## j = 20
-  ## j = 5 # Ca
-  ## j = 27 # SpCond
-  for(j in 1:length(solutes)){
+
+  foreach(j = 1:length(solutes), .combine = bind_rows) %do% {
+
     writeLines(paste("site:", site_code,
-                     "var:", solutes[j]))
+                     "var:", solutes[j]),
+               con = logfile)
 
     #set to target solute
     target_solute <- solutes[j]
@@ -112,7 +130,8 @@ for(i in 1:length(site_files)){
 
     # read out conversions
     writeLines(paste("\n  unit conversion for", target_solute,
-                     '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'))
+                     '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'),
+               con = logfile)
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
               filter(ms_interp == 0,
@@ -213,10 +232,13 @@ for(i in 1:length(site_files)){
     ## write_feather(raw_data_full, "data/ms/hbef/true/w3_chem_samples.feather")
     ## k = 1
     ### Loop through good years #####
-    for(k in 1:length(good_years)){
+
+    # for(k in 1:length(good_years)){
+    foreach(k = 1:length(good_years), .combine = bind_rows) %dopar% {
 
       writeLines(paste("site:", site_code,
-                       'year:', good_years[k]))
+                       'year:', good_years[k]),
+                 con = logfile)
 
         target_year <- as.numeric(as.character(good_years[k]))
 
@@ -314,7 +336,6 @@ for(i in 1:length(site_files)){
         # calculate annual flux from composite
         flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
 
-
         ###### error estimation ######
         n = nrow(chem_df)
         theta <- function(x, chem_df, q_df){
@@ -406,7 +427,8 @@ for(i in 1:length(site_files)){
         target_year_out_combined <- target_year_out %>%
             left_join(., target_year_out_jack, by = 'method')
 
-        out_frame <- rbind(out_frame, target_year_out_combined)
+        # out_frame <- rbind(out_frame, target_year_out_combined)
+        return(target_year_out_combined)
 
         } # end year loop
 
@@ -431,3 +453,4 @@ for(i in 1:length(site_files)){
   write_feather(out_frame, file_path)
 } # end site loop
 
+stopCluster(cl)
