@@ -5,6 +5,7 @@ library(glue)
 library(lubridate)
 library(EGRET)
 library(macrosheds)
+library(bootstrap)
 
 source('source/helper_functions.R')
 source('source/egret_overwrites.R')
@@ -45,14 +46,14 @@ for(i in 1:length(site_files)){
         pull(X)
 
     # read in chemistry data
-    raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+    raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
         filter(ms_interp == 0)
 
     # read in discharge data
     raw_data_q <- read_feather(here(glue(data_dir, '/discharge/', site_code, '.feather')))
 
     # initialize next loop
-    solutes <- raw_data_con %>%
+    solutes <- raw_data_con_in %>%
         ## filter(!str_detect(var, 'Charge'),
         ##        !str_detect(var, 'temp'),
         ##        !str_detect(var, 'pH')) %>%
@@ -148,12 +149,12 @@ for(i in 1:length(site_files)){
             mutate(wy = as.numeric(as.character(wy))) %>%
             filter(wy == target_year)
 
-        # find months with at least 2 samples in them
+        # find months with at least 3 samples in them
         good_months <- raw_data_target_year %>%
             mutate(month = month(datetime)) %>%
             group_by(month) %>%
             tally(!is.na(con)) %>%
-            filter(n > 1) %>%
+            filter(n > 2) %>%
             pull(month)
 
         # isolate to target year
@@ -183,6 +184,47 @@ for(i in 1:length(site_files)){
             ungroup() %>%
             select(date, flux)
 
+        ##### error estimation ######
+        theta <- function(x, raw_data_target_month, n_index){
+            flux_monthly_average <- raw_data_target_month[n_index[x],] %>%
+                summarize(q_lps = mean(q_lps, na.rm = TRUE),
+                          con = mean(con, na.rm = TRUE)) %>%
+                # multiply by seconds in a year, and divide my mg to kg conversion (1M)
+                mutate(flux = con*q_lps*3.154e+7*(1/area)*1e-6) %>%
+                pull(flux)
+            return(flux_monthly_average)
+        }
+
+        ###### initialize output for jackknife #####
+        flux_monthly_average_jack <- tibble(month = as.integer(),
+                                  se = as.numeric(),
+                                  bias = as.numeric())
+
+        ###### apply jackknife ######
+        for(l in good_months){
+            target_month <- good_months[l]
+
+            raw_data_target_month <- raw_data_target_year %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            n_index <- raw_data_target_month %>%
+                arrange(datetime) %>%
+                mutate(index = row_number(datetime)) %>%
+                select(con, index) %>%
+                na.omit() %>%
+                pull(index)
+
+            n = length(n_index)
+
+            month_jack <- jackknife(1:n,theta, raw_data_target_year, n_index)
+
+            out_jack <- tibble(month = target_month,
+                               se = month_jack$jack.se,
+                               bias = month_jack$jack.bias)
+
+            flux_monthly_average_jack <- rbind(flux_monthly_average_jack, out_jack)
+        }
 
         #### calculate period weighted #####
         pw_con_df <- chem_df %>%
@@ -193,6 +235,47 @@ for(i in 1:length(site_files)){
         flux_monthly_pw <- calculate_pw(chem_df = pw_con_df, q_df,
                                        datecol = 'datetime', period = 'month')
 
+        ##### error estimation ######
+        theta <- function(x, pw_con_df_month, q_df, n_index){
+            chem_df_jack <- pw_con_df_month[n_index[x],]
+
+            flux_monthly_pw <- calculate_pw(chem_df = chem_df_jack, q_df = q_df,
+                                            datecol = 'datetime')
+
+            return(flux_monthly_pw)
+        }
+
+        ###### initialize output for jackknife #####
+        flux_monthly_pw_jack <- tibble(month = as.integer(),
+                                            se = as.numeric(),
+                                            bias = as.numeric())
+
+        ###### apply jackknife ######
+        for(l in good_months){
+            target_month <- good_months[l]
+
+            pw_con_df_month <- pw_con_df %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            n_index <- pw_con_df_month  %>%
+                arrange(datetime) %>%
+                mutate(index = row_number(datetime)) %>%
+                select(con, index) %>%
+                na.omit() %>%
+                pull(index)
+
+            n = length(n_index)
+
+            month_jack <- jackknife(1:n,theta, pw_con_df_month, q_df, n_index)
+
+            out_jack <- tibble(month = target_month,
+                               se = month_jack$jack.se,
+                               bias = month_jack$jack.bias)
+
+            flux_monthly_pw_jack <- rbind(flux_monthly_pw_jack, out_jack)
+        }
+
         #### calculate beale ######
         beale_df <- chem_df %>%
             mutate(month = month(datetime)) %>%
@@ -201,9 +284,99 @@ for(i in 1:length(site_files)){
         flux_monthly_beale <- calculate_beale(chem_df = beale_df, q_df, datecol = 'datetime',
                                               period = 'month')
 
+        ##### error estimation ######
+        theta <- function(x, beale_df_month, q_df_month, n_index){
+            beale_df_jack <- beale_df_month[n_index[x],]
+
+            flux_monthly_beale <- calculate_pw(chem_df = beale_df_jack, q_df = q_df_month,
+                                            datecol = 'datetime', period = 'month')
+
+            return(flux_monthly_beale)
+        }
+
+        ###### initialize output for jackknife #####
+        flux_monthly_beale_jack <- tibble(month = as.integer(),
+                                       se = as.numeric(),
+                                       bias = as.numeric())
+
+        ###### apply jackknife ######
+        for(l in good_months){
+            target_month <- good_months[l]
+
+            beale_df_month <- beale_df %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            q_df_month <- q_df %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            n_index <- beale_df_month  %>%
+                arrange(datetime) %>%
+                mutate(index = row_number(datetime)) %>%
+                select(con, index) %>%
+                na.omit() %>%
+                pull(index)
+
+            n = length(n_index)
+
+            month_jack <- jackknife(1:n, theta, beale_df_month, q_df_month, n_index)
+
+            out_jack <- tibble(month = target_month,
+                               se = month_jack$jack.se,
+                               bias = month_jack$jack.bias)
+
+            flux_monthly_beale_jack <- rbind(flux_monthly_beale_jack, out_jack)
+        }
+
         #### calculate rating #####
         flux_monthly_rating <- calculate_rating(chem_df, q_df, datecol = 'datetime',
                                                 period = 'month')
+
+        ##### error estimation ######
+        theta <- function(x, chem_df_exclude, q_df_month, n_index){
+            rating_df_jack <- chem_df_month[-n_index[-x],]
+
+            flux_monthly_rating <- calculate_pw(chem_df = chem_df_month, q_df = q_df_month,
+                                               datecol = 'datetime')
+
+            return(flux_monthly_rating)
+        }
+
+        ###### initialize output for jackknife #####
+        flux_monthly_rating_jack <- tibble(month = as.integer(),
+                                          se = as.numeric(),
+                                          bias = as.numeric())
+
+        ###### apply jackknife ######
+        for(l in good_months){
+            target_month <- good_months[l]
+
+            chem_df_month <- chem_df %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            q_df_month <- q_df %>%
+                mutate(month = month(datetime)) %>%
+                filter(month == target_month)
+
+            n_index <- chem_df_month  %>%
+                arrange(datetime) %>%
+                mutate(index = row_number(datetime)) %>%
+                select(con, index) %>%
+                na.omit() %>%
+                pull(index)
+
+            n = length(n_index)
+
+            month_jack <- jackknife(1:n, theta, chem_df_month, q_df_month, n_index)
+
+            out_jack <- tibble(month = target_month,
+                               se = month_jack$jack.se,
+                               bias = month_jack$jack.bias)
+
+            flux_monthly_rating_jack <- rbind(flux_monthly_rating_jack, out_jack)
+        }
 
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,

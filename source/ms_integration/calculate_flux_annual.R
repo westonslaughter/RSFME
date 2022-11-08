@@ -25,15 +25,15 @@ source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
 # ng
-## data_dir <- here('streamlined/data/ms/hbef/')
+data_dir <- here('streamlined/data/ms/hbef/')
 ## site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
-## site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
 ## var_info <- nick/file/path
 
 # ws
-data_dir <- here('data/ms/hbef/')
+#data_dir <- here('data/ms/hbef/')
 ## site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('data/site/ms_site_info.csv'))
+#site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 ## var_info <- read_csv('data/ms/macrosheds_vardata.csv')
 
 ## run below if you do not already have macrosheds core data and catalogs
@@ -111,7 +111,7 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
   ## Loop through solutes at site #####
   ## j = 1
   ## j = 20
-  #for(j in 1:length(solutes)){
+
   foreach(j = 1:length(solutes), .combine = bind_rows) %do% {
 
     writeLines(paste("site:", site_code,
@@ -124,7 +124,7 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
     # convert all solutes to mg/L
     solute_name <- ms_drop_var_prefix(target_solute)
     solute_default_unit <- var_info[var_info$variable_code == solute_name,] %>%
-      filter(variable_type == 'chem_discrete') %>%
+      filter(variable_type %in% c('chem_discrete', 'chem_mix')) %>%
       ## filter(chem_category == 'stream_conc') %>%
       pull(unit)
 
@@ -134,15 +134,15 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
                con = logfile)
 
     raw_data_con <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
-        filter(ms_interp == 0,
-               val > 0) %>%
-      filter(var == target_solute) %>%
-        # conver units from macrosheds default to g/L
-        ms_conversions(convert_units_from = tolower(solute_default_unit),
-                                  convert_units_to = "mg/l",
-                       macrosheds_root = ms_root) %>%
-        select(datetime, val, val_err) %>%
-        tidyr::drop_na(datetime, val)
+              filter(ms_interp == 0,
+                     val > 0) %>%
+              filter(var == target_solute) %>%
+              # conver units from macrosheds default to g/L
+              ms_conversions(convert_units_from = tolower(solute_default_unit),
+                                        convert_units_to = "mg/l",
+                             macrosheds_root = ms_root) %>%
+              select(datetime, val, val_err) %>%
+              tidyr::drop_na(datetime, val)
 
     # errors
     raw_data_con$val = errors::set_errors(raw_data_con$val, raw_data_con$val_err)
@@ -327,7 +327,6 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
         #### calculate WRTDS ######
 
         # put agg here
-
         #### calculate composite ######
         rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                             q_df = q_df,
@@ -401,11 +400,11 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
                                           flux_annual_pw,
                                           flux_annual_beale,
                                           flux_annual_rating,
-                                          flux_annual_wrtds,
+                                          ## flux_annual_wrtds,
                                           flux_annual_comp$flux[1]),
                             site_code = !!site_code,
                             var = !!target_solute,
-                            method = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite')) %>%
+                            method = c('average', 'pw', 'beale', 'rating', 'composite')) %>%
             mutate(ms_recommended = ifelse(method == !!ideal_method, 1, 0))
 
         #### congeal SE ####
@@ -432,6 +431,17 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
         return(target_year_out_combined)
 
         } # end year loop
+
+        wrtds_out <- flux_annual_wrtds %>%
+          filter(wy %in% good_years) %>%
+          rename(val = flux) %>%
+          mutate(site_code = site_code,
+                 var = solutes[j],
+                 method = 'wrtds',
+                 ms_recommended = 0)
+
+        out_frame <- rbind(out_frame, wrtds_out) %>%
+          arrange(desc(method), desc(wy))
     } # end solute loop
 
     directory <- glue(data_dir,'stream_flux/')
@@ -440,7 +450,7 @@ out_frame <- foreach(i = 1:length(site_files), .combine = bind_rows) %do% {
     }
     file_path <- glue('{directory}/{s}.feather',
                       s = site_code)
-write_feather(out_frame, file_path)
+  write_feather(out_frame, file_path)
 } # end site loop
 
 stopCluster(cl)
