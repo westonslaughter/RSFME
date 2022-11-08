@@ -1,4 +1,4 @@
-
+library(plotly)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -85,14 +85,14 @@ flux_compare_plot <- function(data, watershed, solute) {
   return(solute_plot)
 }
 
-library(plotly)
 network = 'lter'
 domain = 'hbef'
+
 for(ws in names(hbef_links)) {
   plot_fp <- glue('flux_plots/{network}/{domain}/{site}/flux_methods_timeseries/',
                   network = network,
                   domain = domain,
-                  site = watershed)
+                  site = ws)
   dir.create(plot_fp, recursive = TRUE)
 
   ws_filename <- paste0(ws, '.csv')
@@ -101,6 +101,7 @@ for(ws in names(hbef_links)) {
   download.file(url = hbef_links[ws], ws_fp)
 
   ws_pub <- read.csv(ws_fp)
+
   ws_flux <- hbef_flux %>%
     filter(site_code == ws)
 
@@ -124,22 +125,33 @@ for(ws in names(hbef_links)) {
   ws_ms <- ws_flux %>%
     select(wy, site_code, method, any_of(ms_solutes))
 
-  ws_pub <- ws_pub %>%
+  ws_published <- ws_pub[,!duplicated(colnames(ws_pub))] %>%
     mutate(site_code = ws,
            wy = water_year(paste0(Year_Month, '-01')),
+           month = Month,
            method = 'published'
-           )
-    select(wy, site_code, method, any_of(ms_solutes))
+           ) %>%
+    select(wy, site_code, method, any_of(ws_solutes)) %>%
+    replace(. == -888.88, NA) %>%
+    group_by(wy, site_code, method) %>%
+    summarize(
+      across(where(is.double), ~ sum(.x, na.rm = TRUE))
+    ) %>%
+    replace(. == 0, NA)
+    ## filter_all(all_vars(. != -888.88))
+  ##
+  ws_flux <- bind_rows(ws_ms, ws_published)
 
   fluxes <- colnames(ws_flux)[4:ncol(ws_flux)]
 
   # for each solute in ws record
   for(solute in fluxes) {
-    ws_pub <-
-
     ws_solute_flux <- ws_flux %>%
       select(wy, site_code, method, !!solute) %>%
-      filter(!is.na(!!solute))
+      filter(!is.na(!!solute)) %>%
+      mutate(
+        !!solute := case_when(method == 'published' ~ get(solute)/1000, TRUE ~ get(solute))
+      )
 
     site_solute_plot <- flux_compare_plot(ws_solute_flux, ws, solute)
     ggsave(paste0(plot_fp, 'solute.png'), site_solute_plot, bg = 'white')
