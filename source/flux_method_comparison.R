@@ -5,11 +5,24 @@ library(grid)
 library(gridExtra)
 library(ggrepel)
 library(lfstat)
+library(tidyverse)
 
 source('./source/flux_methods.R')
 source('./source/helper_functions.R')
 
+# HBEF compile
+hbef_fp <- file.path('data','ms', 'hbef', 'stream_flux')
+hbef_files <- list.files(hbef_fp, full.names = TRUE)
+hbef_df <- do.call(rbind,lapply(hbef_files, read_feather))
 
+# remove duplicates
+hbef <- hbef_df[!(duplicated(hbef_df) | duplicated(hbef_df, fromLast = FALSE)),]
+
+hbef_annual_flux <- hbef %>%
+  pivot_wider(id_cols = c('wy', 'site_code', 'method'),
+              names_from = c('var'),
+              values_from = c('val'))
+write.csv(hbef_annual_flux, "hbef_annual_flux.csv")
 
 # all HBEF
 hbef_ws <- c('w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9')
@@ -716,3 +729,106 @@ w3_plot <- ggplot(ws.data[ws.data$site_code == ws & ws.data$val < 10,], aes(x=wy
   geom_vline(xintercept = ws.outlier.wys,
              col = "darkgray", lwd = 0.25, linetype = 5)
 w3_plot
+
+# all HBEF
+hbef_ws <- c('w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9')
+ws.data <- read_feather('data/ms/hbef/stream_flux/w9.feather')
+
+ws.data$wy <- as.Date(ws.data$wy, format = "%Y")
+breaks.vec <- seq(min(ws.data$wy), max(ws.data$wy), by = "5 years")
+
+# make list of plots
+hbef_flux_plots <- list()
+index = 1
+
+# ppulatewith each WS data
+for(ws in hbef_ws) {
+    # find major outliers
+    ws.this.outliers <- which(ws.data$site_code == ws & ws.data$val > 200)
+
+    # report number of WRTDS measurements removed
+    ws.n.otl <- length(ws.this.outliers[ws.this.outliers])
+    ws.n.text <- paste(ws, 'outliers:', ws.n.otl)
+    print(ws.n.text)
+
+    # remove these outliers
+    ws.data <- ws.data[-ws.this.outliers,]
+
+    # plot remainder
+    hbef_flux_plots[[ws]] <- ggplot(ws.data[ws.data$site_code == ws,], aes(x=wy, y = val)) +
+      geom_point(aes(color = method), size = 3.5) +
+      ## geom_line(aes(group = method, color = method)) +
+      theme_minimal() +
+      ylim(0, 150) +
+      scale_x_date(breaks = breaks.vec, limits = c(breaks.vec[1], breaks.vec[length(breaks.vec)]), date_labels = "%Y") +
+      theme(panel.grid.major = element_blank(),
+            legend.position="none",
+            text = element_text(size = 24),
+            plot.title = element_text(size = 24, face = "bold")) +
+      ggtitle(ws) +
+      annotate(geom="text",
+               x=breaks.vec[length(breaks.vec)-2],
+               y=120,
+               label=ws.n.text,
+               size = 6,
+               color="black")
+
+  if(!index %in% c(1, 4, 7)){
+    hbef_flux_plots[[ws]] <- hbef_flux_plots[[ws]] +
+      theme(axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+  }
+
+  if(index %in% c(1, 7)) {
+      hbef_flux_plots[[ws]] <- hbef_flux_plots[[ws]] +
+        theme(axis.title.y = element_blank())
+  } else if(index == 4) {
+      hbef_flux_plots[[ws]] <- hbef_flux_plots[[ws]] +
+        ylab('Nitrate Nitrogen (Kg/yr)')
+  }
+
+  if(!index %in% c(7, 8, 9) ){
+    hbef_flux_plots[[ws]] <- hbef_flux_plots[[ws]] +
+      theme(axis.title.x = element_blank(),
+            axis.text.x = element_blank())
+  }
+
+    index = index + 1
+}
+
+plt_title <- paste("Annual Flux of Nitrate Nitrogen (kg) in HBEF Watersheds 1-9")
+hbef_annual_flux_methods <- grid.arrange(
+             hbef_flux_plots[['w1']],
+             hbef_flux_plots[['w2']],
+             hbef_flux_plots[['w3']] + theme(legend.position = 'top'),
+             hbef_flux_plots[['w4']],
+             hbef_flux_plots[['w5']],
+             hbef_flux_plots[['w6']],
+             hbef_flux_plots[['w7']],
+             hbef_flux_plots[['w8']],
+             hbef_flux_plots[['w9']],
+             nrow = 3, ncol = 3,
+             top = textGrob(plt_title, gp=gpar(fontsize=26, font=3), vjust = -2),
+             vp = viewport(width=0.9, height=0.9))
+
+
+
+# HBEF (NEDVI)
+hbef_veg <- read.csv('~/science/macrosheds/portal/data/general/spatial_downloadables/spatial_timeseries_vegetation.csv') %>%
+  filter(network == 'lter',
+         domain == 'hbef',
+         ## var == c('vb_ndvi_mean', 'vb_ndvi_median', 'vb_ndvi_sd')
+         ) %>%
+  # filter out annual summary, which are all on new years
+  filter(
+    lubridate::month(date) != 1,
+    lubridate::day(date) != 1
+  ) %>%
+  pivot_wider(
+    id_cols = c('network', 'domain', 'site_code', 'date'),
+    names_from = c('var'),
+    values_from = c('val')
+  )
+
+
+write.csv(hbef_veg, 'hbef_timeseries_vegetation.csv')
