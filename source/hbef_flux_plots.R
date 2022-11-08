@@ -49,7 +49,43 @@ detect_outlier <- function(x) {
     x > Quantile3 + (IQR*1.5) | x < Quantile1 - (IQR*1.5)
 }
 
-# plotting function
+# plotting function (if only for looking in R)
+flux_compare_plot_r <- function(data, watershed, solute) {
+  # look at flux time series
+  fluxpal <- rev(brewer.pal(n=7, name='Dark2'))
+  data <- data %>%
+    rename(
+      solute = !!solute
+    )
+
+  solute_plot <- ggplot() +
+    geom_point(data %>% filter(method == 'published'), mapping = aes(x=wy, y=solute, color = method, size = method, shape = method, fill = method)) +
+    geom_line(data %>% filter(method != 'published'), mapping = aes(x=wy, y=solute, group = method, color = method)) +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(),
+          panel.background = element_rect(fill = 'white', color = 'white'),
+        ## legend.position="none",
+        text = element_text(size = 24),
+        plot.title = element_text(size = 22, face = "bold")) +
+    scale_shape_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'published'),
+                     values = c(16, 16, 16, 16, 16, 16, 24)) +
+    scale_color_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                     values = fluxpal) +
+    scale_fill_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                     values = fluxpal) +
+    scale_size_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                    values = c(2, 2, 2, 2, 2, 2, 6)) +
+    ggtitle(glue("Hubbard Brook, {watershed}, 1960's-2020,\n {solute} Flux Estimates by Various Methods ",
+                 watershed = watershed, solute = solute
+                 )) +
+    ylab('Annual Cumulative Solute Flux (kg/ha) \n ') +
+    xlab('\n Water Year (Oct-Sep)') +
+    scale_x_discrete(breaks=seq(1960, 2020, 10))
+
+  return(solute_plot)
+}
+
+# funcitoin optimized for being saved to PNG
 flux_compare_plot <- function(data, watershed, solute) {
   # look at flux time series
   fluxpal <- rev(brewer.pal(n=7, name='Dark2'))
@@ -65,8 +101,8 @@ flux_compare_plot <- function(data, watershed, solute) {
     theme(panel.grid.major = element_blank(),
           panel.background = element_rect(fill = 'white', color = 'white'),
         ## legend.position="none",
-        text = element_text(size = 26),
-        plot.title = element_text(size = 24, face = "bold")) +
+        text = element_text(size = 18),
+        plot.title = element_text(size = 22, face = "bold")) +
     scale_shape_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'published'),
                      values = c(16, 16, 16, 16, 16, 16, 24)) +
     scale_color_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
@@ -74,7 +110,7 @@ flux_compare_plot <- function(data, watershed, solute) {
     scale_fill_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
                      values = fluxpal) +
     scale_size_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
-                    values = c(2, 2, 2, 2, 2, 2, 6)) +
+                    values = c(2, 2, 2, 2, 2, 2, 3)) +
     ggtitle(glue("Hubbard Brook, {watershed}, 1960's-2020,\n {solute} Flux Estimates by Various Methods ",
                  watershed = watershed, solute = solute
                  )) +
@@ -154,7 +190,8 @@ for(ws in names(hbef_links)) {
       )
 
     site_solute_plot <- flux_compare_plot(ws_solute_flux, ws, solute)
-    ggsave(paste0(plot_fp, 'solute.png'), site_solute_plot, bg = 'white')
+    site_solute_filename <- glue(plot_fp, '{solute}.png', solute = solute)
+    ggsave(site_solute_filename, site_solute_plot, bg = 'white')
   }
 
 
