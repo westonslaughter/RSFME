@@ -13,7 +13,10 @@ source('source/usgs_helpers.R')
 # NOTE: seems flux calc sript is ocmppiling sites cumulatively, fix later
 
 # HBEF Flux Estimates by Various Methods from MacroSheds RSFME Project
-hbef_flux <- read_feather('data/ms/hbef/stream_flux/w9.feather') %>%
+ms_data <- list.files('data/nice/stream_flux/hbef', full.names = TRUE)
+hbef_raw <- do.call(rbind,lapply(ms_data,read_feather))
+
+hbef_flux <- hbef_raw %>%
   mutate(var = ms_drop_var_prefix(var)) %>%
   select(-ms_recommended) %>%
   distinct(wy, site_code, method, var, .keep_all = TRUE) %>%
@@ -33,7 +36,65 @@ link_w8 <- 'https://portal.edirepository.org/nis/dataviewer?packageid=knb-lter-h
 link_w9 <- 'https://portal.edirepository.org/nis/dataviewer?packageid=knb-lter-hbr.11.17&entityid=bab6ac4dd3349bfd5cba711ecfd3d74f'
 hbef_links <- c('w1'=link_w1,'w2'=link_w2,'w3'=link_w3,'w4'=link_w4,'w5'=link_w5,'w6'=link_w6,'w7'=link_w7,'w8'=link_w8,'w9'=link_w9)
 
+
+# create detect outlier function (if x is 1.5x the interquartile range higher than 3rd Quart or lower than 1st quart)
+detect_outlier <- function(x) {
+    # calculate first quantile
+    Quantile1 <- quantile(x, probs=.25)
+    # calculate third quantile
+    Quantile3 <- quantile(x, probs=.75)
+    # calculate inter quartile range
+    IQR = Quantile3-Quantile1
+    # return true or false
+    x > Quantile3 + (IQR*1.5) | x < Quantile1 - (IQR*1.5)
+}
+
+# plotting function
+flux_compare_plot <- function(data, watershed, solute) {
+  # look at flux time series
+  fluxpal <- rev(brewer.pal(n=7, name='Dark2'))
+  data <- data %>%
+    rename(
+      solute = !!solute
+    )
+
+  solute_plot <- ggplot() +
+    geom_point(data %>% filter(method == 'published'), mapping = aes(x=wy, y=solute, color = method, size = method, shape = method, fill = method)) +
+    geom_line(data %>% filter(method != 'published'), mapping = aes(x=wy, y=solute, group = method, color = method)) +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(),
+          panel.background = element_rect(fill = 'white', color = 'white'),
+        ## legend.position="none",
+        text = element_text(size = 26),
+        plot.title = element_text(size = 24, face = "bold")) +
+    scale_shape_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite', 'published'),
+                     values = c(16, 16, 16, 16, 16, 16, 24)) +
+    scale_color_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                     values = fluxpal) +
+    scale_fill_manual(breaks = c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                     values = fluxpal) +
+    scale_size_manual(breaks =  c('average', 'pw', 'beale', 'rating', 'wrtds', 'composite',  'published'),
+                    values = c(2, 2, 2, 2, 2, 2, 6)) +
+    ggtitle(glue("Hubbard Brook, {watershed}, 1960's-2020,\n {solute} Flux Estimates by Various Methods ",
+                 watershed = watershed, solute = solute
+                 )) +
+    ylab('Annual Cumulative Solute Flux (kg/ha) \n ') +
+    xlab('\n Water Year (Oct-Sep)') +
+    scale_x_discrete(breaks=seq(1960, 2020, 10))
+
+  return(solute_plot)
+}
+
+library(plotly)
+network = 'lter'
+domain = 'hbef'
 for(ws in names(hbef_links)) {
+  plot_fp <- glue('flux_plots/{network}/{domain}/{site}/flux_methods_timeseries/',
+                  network = network,
+                  domain = domain,
+                  site = watershed)
+  dir.create(plot_fp, recursive = TRUE)
+
   ws_filename <- paste0(ws, '.csv')
   ws_fp = file.path(hbef_pubs_dir, ws_filename)
 
@@ -41,7 +102,7 @@ for(ws in names(hbef_links)) {
 
   ws_pub <- read.csv(ws_fp)
   ws_flux <- hbef_flux %>%
-    filter(site_code == site)
+    filter(site_code == ws)
 
   # solutes in the macrosheds df
   ws_ms_solutes <- colnames(ws_flux)[4:length(colnames(ws_flux))]
@@ -63,12 +124,27 @@ for(ws in names(hbef_links)) {
   ws_ms <- ws_flux %>%
     select(wy, site_code, method, any_of(ms_solutes))
 
+  ws_pub <- ws_pub %>%
+    mutate(site_code = ws,
+           wy = water_year(paste0(Year_Month, '-01')),
+           method = 'published'
+           )
+    select(wy, site_code, method, any_of(ms_solutes))
+
+  fluxes <- colnames(ws_flux)[4:ncol(ws_flux)]
+
   # for each solute in ws record
-  for(solute in unique(ws_flux$))
+  for(solute in fluxes) {
+    ws_pub <-
 
     ws_solute_flux <- ws_flux %>%
       select(wy, site_code, method, !!solute) %>%
       filter(!is.na(!!solute))
+
+    site_solute_plot <- flux_compare_plot(ws_solute_flux, ws, solute)
+    ggsave(paste0(plot_fp, 'solute.png'), site_solute_plot, bg = 'white')
+  }
+
 
 # create annual flux comparison plots, including published fluxes
 #   add water flux as area behind
