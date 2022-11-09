@@ -13,10 +13,11 @@ source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
 data_dir <- here('data/ms/')
+## site_files  <- list.files(data_dir, recursive = F)
 
 hbef_files  <- list.files('data/ms/hbef/discharge', recursive = F)
 hj_files  <- list.files('data/ms/hjandrews/discharge', recursive = F)
-## site_files <- c(hbef_files, hj_files)
+site_files <- c(hbef_files, hj_files)
 
 site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 
@@ -32,10 +33,12 @@ out_frame <- tibble(wy = as.integer(),
                     ms_missing_ratio = as.numeric())
 ## i = 1
 # Loop through sites #####
+## hbef_diTopic: Weston Slaughter's Personal Meeting Room
+
 hbef_dir <- here('data/ms/hbef/')
 hj_dir <- here('data/ms/hjandrews/')
 
-choices <- c('hjandrews')
+choices <- c('hbef')
 
 for(choice in choices) {
   if(choice == 'hbef') {
@@ -47,12 +50,24 @@ for(choice in choices) {
   }
 }
 
+# list all networks
+## networks <- list.files(data_dir, recursive = F)
+## networks <- networks[!networks %in% c("hbef", "hjandrews", "arctic")]
+## networks <- "hbef"
+
 # read in variables data
 ms_flux_vars <- ms_download_variables() %>%
   filter(flux_convertible == 1) %>%
   pull(variable_code)
 
-for(i in 1:length(site_files)){
+for(nwk in networks){
+
+  writeLines(paste("\n\n starting annual flux calculations for netowrk:", nwk, "\n\n"))
+
+  data_dir <- here(glue('data/ms/{network}', network = nwk))
+  site_files  <- list.files(glue('data/ms/{network}/discharge', network = nwk), recursive = F)
+
+  for(i in 1:length(site_files)){
 
     site_file <- site_files[i]
     site_code <- strsplit(site_file, split = '.feather')[[1]]
@@ -73,7 +88,8 @@ for(i in 1:length(site_files)){
         pull(X)
 
     # read in chemistry data
-    raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+  raw_data_con_in <- read_feather(here(glue(data_dir, '/stream_chemistry/', site_code, '.feather'))) %>%
+    # NOTE: is there only temp data at GS Watershed 3?
       filter(ms_interp == 0,
              # dropping all vars that are not marked as 'flux convertible'
              ms_drop_var_prefix(var) %in% ms_flux_vars)
@@ -91,6 +107,14 @@ for(i in 1:length(site_files)){
         select(var) %>%
         unique() %>%
         pull(var)
+
+  if(length(solutes) == 0) {
+    writeLines(
+      glue("\n\n no flux convertible solutes in stream chemistry data for {site}", site = site_code),
+      "\n   skipping to next site\n"
+      )
+    next
+  }
 
   writeLines(paste("FLUX CALCS:", site_code))
 
@@ -118,7 +142,8 @@ for(i in 1:length(site_files)){
     # find acceptable years
     q_check <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
-        filter(ms_interp == 0) %>%
+        # NOTE: should we filter out NAs?
+        filter(ms_interp == 0, !is.na(val)) %>%
         distinct(., date, .keep_all = TRUE) %>%
         mutate(water_year = water_year(datetime, origin = "usgs")) %>%
         group_by(water_year) %>%
@@ -127,6 +152,8 @@ for(i in 1:length(site_files)){
 
     conc_check <- raw_data_con %>%
         mutate(date = date(datetime)) %>%
+        # NOTE: should we filter out NAs?
+        filter(!is.na(val)) %>%
         distinct(., date, .keep_all = TRUE) %>%
         mutate(water_year = water_year(date, origin = "usgs"),
                quart = quarter(date)) %>%
@@ -136,12 +163,28 @@ for(i in 1:length(site_files)){
         filter(n >= 4,
                count > 3)
 
+
     q_good_years <- q_check$water_year
     conc_good_years <- conc_check$water_year
 
     # 'good years' where Q and Chem data both meet min requirements
     good_years <- q_good_years[q_good_years %in% conc_good_years]
     n_yrs <- length(good_years)
+
+    # NOTE: adding handling if concentration data fails conc check
+    if(nrow(conc_check) < 1) {
+      writeLines(glue("{site} concentration data insufficient sample size and frequency to warrant flux estimation",
+                      "\n   no water years in {site} dataset with minimum standards met", site = site_code))
+      next
+    } else if(nrow(q_check) < 1) {
+      writeLines(glue("{site} discharge data insufficient sample size and frequency to warrant flux estimation",
+                      "\n   no water years in {site} dataset with minimum standards met", site = site_code))
+      next
+    } else if(length(good_years) == 0) {
+      writeLines(glue("no water years where q data and concentration data both meet minimum standards",
+                      "skipping site: {site}", site = site_code))
+      next
+    }
 
     #join data and cut to good years
     daily_data_con <- raw_data_con %>%
@@ -306,6 +349,7 @@ for(i in 1:length(site_files)){
         con_acf <- abs(acf(paired_df$con, lag.max = 1, plot = FALSE)$acf[2])
 
         # modified from figure 10 of Aulenbach et al 2016
+      if(!is.nan(r_squared)) {
         if(r_squared > 0.3){
             if(resid_acf > 0.2){
                 ideal_method <- 'composite'
@@ -319,6 +363,10 @@ for(i in 1:length(site_files)){
                 ideal_method <- 'average'
             }
         }
+      } else {
+        writeLines("\n\n ideal method error: r_squared value was NaN, ideal method set to NA\n\n")
+        ideal_method <- NA
+      }
 
 
         #### congeal fluxes ####
