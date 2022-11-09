@@ -11,9 +11,9 @@ source('source/egret_overwrites.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
-data_dir <- here('streamlined/data/ms/hbef/')
-site_files  <- list.files('streamlined/data/ms/hbef/discharge', recursive = F)
-site_info  <- read_csv(here('streamlined/data/site/ms_site_info.csv'))
+data_dir <- here('data/ms/hbef/')
+site_files  <- list.files('data/ms/hbef/discharge', recursive = F)
+site_info  <- read_csv(here('data/site/ms_site_info.csv'))
 
 # df to populate with annual flux values by method
 out_frame <- tibble(wy = as.integer(),
@@ -114,14 +114,14 @@ for(i in 1:length(site_files)){
     }else{
 
     # get data ready for egret adaptation ####
-    chem_df <- raw_data_con %>%
-        mutate(date = date(datetime)) %>%
-        group_by(date) %>%
-        summarize(val = mean(val)) %>%
-        mutate(site_code = !!site_code, var = 'con',
-               wy = water_year(date, origin = 'usgs')) %>%
-        select(site_code, datetime = date, con = val, wy) %>%
-        na.omit()
+    # chem_df <- raw_data_con %>%
+    #     mutate(date = date(datetime)) %>%
+    #     group_by(date) %>%
+    #     summarize(val = mean(val)) %>%
+    #     mutate(site_code = !!site_code, var = 'con',
+    #            wy = water_year(date, origin = 'usgs')) %>%
+    #     select(site_code, datetime = date, con = val, wy) %>%
+    #     na.omit()
 
     q_df <- raw_data_q %>%
         mutate(date = date(datetime)) %>%
@@ -129,17 +129,30 @@ for(i in 1:length(site_files)){
         summarize(val = mean(val)) %>%
         mutate(site_code = !!site_code, var = 'q_lps',
                wy = water_year(date, origin = 'usgs')) %>%
+        #select(site_code, datetime = date, var, val, wy) %>%
         select(site_code, datetime = date, q_lps = val, wy) %>%
         na.omit()
 
 
-    flux_wrtds <- calculate_wrtds(
-        chem_df = chem_df,
+    con_full <- raw_data_con %>%
+        mutate(wy = as.numeric(as.character(water_year(datetime, origin = 'usgs'))),
+               site_code = site_code) %>%
+        select(site_code, datetime, con = val, wy) %>%
+        ## filter(wy < 1975) %>%
+        na.omit()
+
+    #### calculate WRTDS ######
+    flux <- calculate_wrtds(
+        chem_df = con_full,
         q_df = q_df,
         ws_size = area,
         lat = lat,
         long = long,
-        datecol = 'datetime')
+        datecol = 'datetime',
+        agg = 'annual',
+        minNumObs = 100,
+        minNumUncen = 50
+    )
 
 
         } # end good data else statement

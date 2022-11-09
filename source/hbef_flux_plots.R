@@ -198,12 +198,17 @@ for(ws in names(hbef_links)) {
     # PAIRWISE: method to method regre  p <- ggplot(data = data, mapping = mapping) +
     site_solute_filename <- glue(plot_fp, 'pairplot_{solute}.svg', solute = solute)
     svg(site_solute_filename, height = 7, width = 7)
+<<<<<<< HEAD
     ws_pair_data <- ws_solute_flux %>%
+=======
+    ws_pairs <- ws_solute_flux %>%
+>>>>>>> 3c63b19ce93d80b1b6a599443cad110e87e67c6a
       pivot_wider(
         id_cols = all_of(c('site_code', 'wy')),
         names_from = method,
         values_from = solute
       )
+<<<<<<< HEAD
     ws_pairs <- ggpairs(ws_pair_data, columns = 3:ncol(ws_pair_data))
     print(ws_pairs)
     dev.off()
@@ -233,6 +238,12 @@ for(ws in names(hbef_links)) {
 
     print(yield_plot)
     dev.off()
+=======
+    ggpairs(ws_pairs, columns = 3:ncol(ws_pairs))
+    print(ws_pairs)
+    dev.off()
+
+>>>>>>> 3c63b19ce93d80b1b6a599443cad110e87e67c6a
   }
 
 
