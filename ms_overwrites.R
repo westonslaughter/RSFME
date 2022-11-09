@@ -542,11 +542,13 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
 
     # check that method, if non-null, is in accepted list
     rsfme_accepted <- c('average', 'pw', 'composite', 'wrtds', 'beale', 'simple')
-    if(!method %in% rsfme_accepted) {
-      stop(glue('method supplied is not in accepted list, must be one of the following:\n {list}',
+    for(m in method) {
+      if(!m %in% rsfme_accepted) {
+        stop(glue('m supplied is not in accepted list, must be one of the following:\n {list}',
                 list = rsfme_accepted))
-    } else {
-      writeLines(glue('calculating flux using method: {method}', method = method))
+      } else {
+        writeLines(glue('calculating flux using method: {m}', m = m))
+      }
     }
 
     # make sure agg option is annual or monthly if calculating any non-null method
@@ -663,20 +665,21 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
             chem_chunk <- chem_split[[i]]
 
             # target solute
-            target_solute <- unique(chem_chunk %>% pull(var))
+            target_solute <- ms_drop_var_prefix(unique(chem_chunk %>% pull(var)))
 
             writeLines(glue('________\n\nformula: {method}\nsolute: {solute}\n________', method = method, solute = target_solute ))
 
             # 'good year' checks for RSFME calcs
-            if(method != 'simple') {
+            if(!'simple' %in% method) {
 
               # df to populate with annual flux values by method
               out_frame <- tibble(wy = as.character(),
                     site_code = as.character(),
                     val = as.numeric(),
                     var = as.character(),
-                    method = as.character())
-                    ## ms_reccomended = as.integer(),
+                    method = as.character(),
+                    ms_reccomended = as.integer()
+                    )
                     ## ms_interp_ratio = as.numeric(),
                     ## ms_status_ratio = as.numeric(),
                     ## ms_missing_ratio = as.numeric())
@@ -759,7 +762,7 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
                      ## filter(wy < 1975) %>%
                  na.omit()
 
-              if(tolower(method) == 'wrtds') {
+              if('wrtds' %in% tolower(method)) {
 
                 #### calculate WRTDS ######
                 tryCatch(
@@ -858,7 +861,7 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
                chem_df <- errors::drop_errors(chem_df_errors)
                q_df <- errors::drop_errors(q_df_errors)
 
-              if(method == 'average') {
+              if('average' %in% method) {
                #### calculate average ####
                 flux_annual <- raw_data_target_year %>%
                    group_by(wy) %>%
@@ -867,17 +870,58 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
                    # multiply by seconds in a year, and divide my mg to kg conversion (1M)
                    mutate(flux = con*q_lps*3.154e+7*(1/area)*1e-6) %>%
                  pull(flux)
-              } else if(method == 'pw') {
+
+                 #### congeal fluxes ####
+                 target_year_out <- tibble(wy = as.character(target_year),
+                                           val = flux_annual,
+                                           site_code = !!site_code,
+                                           var = !!target_solute,
+                              method = 'average')
+                 out_frame <- bind_rows(out_frame, target_year_out)
+              }
+
+              if('pw' %in% method) {
                  #### calculate period weighted #####
                  flux_annual <- calculate_pw(chem_df, q_df, datecol = 'datetime')
-              } else if (method =='beale') {
+
+                 #### congeal fluxes ####
+                 target_year_out <- tibble(wy = as.character(target_year),
+                                           val = flux_annual,
+                                           site_code = !!site_code,
+                                           var = !!target_solute,
+                              method = 'pw')
+                 out_frame <- bind_rows(out_frame, target_year_out)
+              }
+
+              if ('beale' %in% method) {
                  #### calculate beale ######
                  flux_annual <- calculate_beale(chem_df, q_df, datecol = 'datetime')
 
-              } else if (method == 'rating') {
+                 #### congeal fluxes ####
+                 target_year_out <- tibble(wy = as.character(target_year),
+                                           val = flux_annual,
+                                           site_code = !!site_code,
+                                           var = !!target_solute,
+                              method = 'beale')
+                 out_frame <- bind_rows(out_frame, target_year_out)
+
+              }
+
+              if ('rating' %in% method) {
                  #### calculate rating #####
                  flux_annual <- calculate_rating(chem_df, q_df, datecol = 'datetime')
-              } else if (method == 'composite') {
+
+                 #### congeal fluxes ####
+                 target_year_out <- tibble(wy = as.character(target_year),
+                                           val = flux_annual,
+                                           site_code = !!site_code,
+                                           var = !!target_solute,
+                              method = 'rating')
+                 out_frame <- bind_rows(out_frame, target_year_out)
+
+              }
+
+              if ('composite' %in% method) {
                   #### calculate composite ######
                   rating_filled_df <- generate_residual_corrected_con(chem_df = chem_df,
                                                                       q_df = q_df,
@@ -886,17 +930,70 @@ ms_calc_flux <- function(chemistry, q, q_type, site_info = NULL, verbose = TRUE,
                   # calculate annual flux from composite
                   flux_annual_comp <- calculate_composite_from_rating_filled_df(rating_filled_df)
                   flux_annual <- flux_annual_comp$flux[1]
-              }
 
                  #### congeal fluxes ####
                  target_year_out <- tibble(wy = as.character(target_year),
                                            val = flux_annual,
                                            site_code = !!site_code,
                                            var = !!target_solute,
-                              method = !!method)
+                              method = 'composite')
                  out_frame <- bind_rows(out_frame, target_year_out)
-              } # end year loop
+                } # end methods choices
 
+                 #### select MS favored ####
+                 paired_df <- q_df %>%
+                     full_join(chem_df, by = c('datetime', 'site_code', 'wy')) %>%
+                     na.omit() %>%
+                     filter(q_lps > 0,
+                            is.finite(q_lps))
+
+                 q_log <- log10(paired_df$q_lps)
+                 c_log <- log10(paired_df$con)
+                 model_data <- tibble(c_log, q_log) %>%
+                     filter(is.finite(c_log),
+                            is.finite(q_log))%>%
+                     na.omit()
+
+                 rating <- summary(lm(model_data$c_log ~ model_data$q_log, singular.ok = TRUE))
+
+                 r_squared <- rating$r.squared
+
+                 resid_acf <- abs(acf(rating$residuals, lag.max = 1, plot = FALSE)$acf[2])
+
+                 con_acf <- abs(acf(paired_df$con, lag.max = 1, plot = FALSE)$acf[2])
+
+                 # modified from figure 10 of Aulenbach et al 2016
+
+                if(!is.nan(r_squared)) {
+                 if(r_squared > 0.3){
+                     if(resid_acf > 0.2){
+                         ideal_method <- 'composite'
+                     }else{
+                         ideal_method <- 'rating'
+                     }
+                }else{
+                    if(con_acf > 0.20){
+                      ideal_method <- 'pw'
+                    }else{
+                      ideal_method <- 'average'
+                    }
+                }
+                } else {
+                  writeLines("\n\n ideal method error: r_squared value was NaN, ideal method set to NA\n\n")
+                  ideal_method <- NA
+                }
+
+                # add to out_frame for target site-solute-year
+                ideals <- c(wy = target_year, site_code = site_code, var = target_solute, method = ideal_method)
+                out_frame <- out_frame %>%
+                  mutate(
+                    ms_reccomended = case_when(
+                      method == ideal_method & wy == target_year & site_code == site_code & var == target_solute ~ 1,
+                      TRUE ~ 0
+                    )
+                  )
+
+              } # end year loop
             } else {
 
         # back to simple flux
