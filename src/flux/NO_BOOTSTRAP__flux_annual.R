@@ -5,12 +5,10 @@ library(glue)
 library(lubridate)
 library(EGRET)
 library(macrosheds)
-library(DescTools)
 
 source('source/helper_functions.R')
-## source('source/egret_overwrites.R')
+source('source/egret_overwrites.R')
 source('ms_overwrites.R')
-source('src/ms/ms_internals.R')
 source('source/flux_methods.R')
 source('source/usgs_helpers.R')
 
@@ -55,7 +53,7 @@ for(choice in choices) {
 # list all networks
 ## networks <- list.files(data_dir, recursive = F)
 ## networks <- networks[!networks %in% c("hbef", "hjandrews", "arctic")]
-networks <- "hbef"
+## networks <- "hbef"
 
 # read in variables data
 ms_flux_vars <- ms_download_variables() %>%
