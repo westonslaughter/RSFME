@@ -35,7 +35,7 @@ calculate_pw <- function(chem_df, q_df, datecol = 'date', period = NULL){
   }
 
   if(is.null(period)){
-  flux_from_pw <- method6(rl_data, ncomp = 1) %>%
+  flux_from_pw <- RiverLoad::method6(rl_data, ncomp = 1) %>%
     sum(.)/(1000*area)
   }else{
 
