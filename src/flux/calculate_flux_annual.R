@@ -70,13 +70,59 @@ logfile <- '~/log.txt' #log to a file (necessary for receiving output from paral
 
 # Loop through domains #####
 domains <- list.dirs(file.path(ms_root), recursive = FALSE)
-domain_names <- list.files(file.path(ms_root))
+domain_names <- basename(list.dirs(file.path(ms_root), recursive = FALSE))
 
-# index=4
+# TODO: skipping any domains this run?
+# domain_filter = c('baltimore', 'fernow')
+all_stream_chem_sites <- c()
+
+for(d in 1:length(domains)) {
+  dmn = domains[d]
+  directory <- glue(file.path(dmn, 'stream_flux'))
+
+  stream_chem_dir <- glue(file.path(dmn, 'stream_chemistry'))
+  stream_chem_files <- list.files(stream_chem_dir, pattern = ".feather")
+  sites <- tools::file_path_sans_ext(stream_chem_files)
+
+  all_stream_chem_sites <- c(all_stream_chem_sites, sites)
+  if(dir.exists(directory)){
+    print(glue('{dmn} stream flux directory found'))
+    files_flux <- list.files(directory, pattern = ".feather")
+    sites_flux <- tools::file_path_sans_ext(files_flux)
+  }
+
+  need_sites <- sites[!sites %in% sites_flux]
+}
+
+
+# clear stream flux?
+# for(d in 1:length(domains)) {
+#   dmn = domains[d]
+#   directory <- glue(file.path(dmn, 'stream_flux'))
+#   directory_ftr <- glue(file.path(dmn, 'stream_flux', '*.feather'))
+#   directory_txt <- glue(file.path(dmn, 'stream_flux', '*.txt'))
+# 
+#   if(dir.exists(directory)){
+#     print(glue('deleting {dmn} stream flux feather amd text files'))
+#     unlink(directory_ftr)
+#     unlink(directory_txt)
+#   }
+# }
+
+main_frame <- site_info %>% 
+  filter(domain %in% domain_names,
+         site_code %in% all_stream_chem_sites
+         ) %>%
+  select(domain, site_code) %>%
+  mutate(
+    flux = FALSE
+  )
+  
+# index=2
 # for(index in 4:length(domains)){
-foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue', 'lubridate',
+foreach(index = 1:length(domains), .packages = c('tidyverse', 'feather', 'glue', 'lubridate',
                                                  'EGRET', 'macrosheds', 'foreach', 'doParallel',
-                                                 'bootstrap', 'lfstat', 'RiverLoad'), .verbose = TRUE) %dopar% {
+                                                 'bootstrap', 'lfstat', 'RiverLoad'), .verbose = TRUE) %do% {
                                                    
     # want to use LOOCV or not?
     error_estimation = FALSE
@@ -109,26 +155,30 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
         dir.create(directory, recursive = TRUE)
     }
     
-    # add log file into this directory
-    log_fn <- glue('{dmn_nm}_annual_flux_log.txt')
-    log_fp <- file.path(directory, log_fn) 
-    
-    start.tm <- Sys.time()
-    start.tz <- Sys.timezone()
-    start.dt <- Sys.Date()
-    
-    cat(glue('{dmn_nm} annual flux log\n'), file = log_fp, sep = "\n")
-    cat(glue('time: {start.tm} {start.tz}\ndate:{start.dt}'), file = log_fp, sep = "\n", append = TRUE)
     # cat(glue(''), file = log_fp, sep = "\n", append = TRUE)
     
       # i=1
     # for(i in 1:length(site_files)){
       # Loop through sites #####
-    foreach(i = 1:length(site_files)) %do% {
+    
+    foreach(i = 1:length(site_files), .packages = c('tidyverse', 'feather', 'glue', 'lubridate',
+                                                    'EGRET', 'macrosheds', 'foreach', 'doParallel',
+                                                    'bootstrap', 'lfstat', 'RiverLoad'), 
+            .verbose = TRUE, .errorhandling = "pass") %dopar% {
   
       site_file <- site_files[i]
       site_code <- strsplit(site_file, split = '.feather')[[1]]
   
+      # add log file into this directory, named by site
+      log_fn <- glue('{dmn_nm}_{site_code}__annual_flux_log.txt')
+      log_fp <- file.path(directory, log_fn) 
+      
+      start.tm <- Sys.time()
+      start.tz <- Sys.timezone()
+      start.dt <- Sys.Date()
+      
+      cat(glue('{dmn_nm} annual flux log\n'), file = log_fp, sep = "\n")
+      cat(glue('time: {start.tm} {start.tz}\ndate:{start.dt}'), file = log_fp, sep = "\n", append = TRUE)
       # NOTE: logfile standard, I will add two hyphens "--" in every log statement for every for loop level deep we go
       #       starting here, so:
       cat(glue('-- {site_code}'), file = log_fp, sep = "\n", append = TRUE)
@@ -163,7 +213,8 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
       )
       
       if(is.null(raw_data_con_in)) {
-        next
+        print('raw chem failed, return NULL')
+        stop("SKIP")
       }
       
       # read in discharge data
@@ -177,7 +228,8 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
       )
       
       if(is.null(raw_data_q)) {
-        next
+        print('raw Q failed')
+        stop("SKIP")
       }
       
       # errors
@@ -201,12 +253,11 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
       ## j = 1
       ## j = 20
   
-    out_frame <- foreach(j = 1:length(solutes), .combine = bind_rows) %do% {
+    out_frame <- foreach(j = 1:length(solutes), .combine = bind_rows, .errorhandling = "pass") %do% {
   
       
       writeLines(paste("site:", site_code,
-                       "var:", solutes[j]),
-                  con = logfile)
+                       "var:", solutes[j]))
   
       #set to target solute
       target_solute <- solutes[j]
@@ -226,13 +277,12 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
       # if no defaultunit, skip solute
       if(length(solute_default_unit) == 0) {
         cat(glue('---- STEP_2_ERROR: solute failed to read in default unit'), file = log_fp, sep = "\n", append = TRUE)
-        next
+        stop("skip")
       }
       
       # read out conversions
       writeLines(paste("\n  unit conversion for", target_solute,
-                       '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'),
-                 con = logfile)
+                       '\n    converting', solute_default_unit, 'to grams per liter (g/L)\n'))
   
       raw_data_con <- tryCatch(
         expr = {
@@ -254,7 +304,9 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
         )
       
       if(is.null(raw_data_con)) {
-        next
+        print("chemistry data read failed")
+        # next
+        stop("SKIP")
       }
   
       # errors
@@ -309,7 +361,10 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
       if(is.null(good_years)) {
         print("good years object is NULL")
         cat(glue('---- STEP_3_ERROR: good years is NULL '), file = log_fp, sep = "\n", append = TRUE)
-        next
+        
+        print('good years NULL, SKIP')
+        stop()
+        # next
       } else if(length(good_years) == 0) {
           cat(glue('---- STEP_3_ERROR: no good years '), file = log_fp, sep = "\n", append = TRUE)
           print(glue('\n----    Alert: data at {dmn}, site: {site_code}, solute: {target_solute},',
@@ -317,8 +372,11 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
                        '            Q has samples in at least {q_days_min} days \n',
                        '            C has samples in at least {c_count_quarters_min} seasons',
                        ' and at least {c_n_sample_min} total samples',
-                       'jumping to next solute'))
-          next
+                       '. jumping to next solute'))
+          
+        print('no good years, SKIP')
+        stop()
+        # next
       }
   
       # if good years pass checks, log years and number of
@@ -685,6 +743,28 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
         arrange(desc(method), desc(wy))
           
       writeLines(glue("---- complete: {target_solute}"))
+      
+      domain = dmn_nm
+      site = site_code
+      solute = target_solute
+      flux_calc = TRUE
+      flux_calc_dt = Sys.time()
+      flux_calc_tz = Sys.timezone()
+            
+      ## TRACKER DF BIND
+      if(!exists("main_flux_frame")) {
+        main_flux_frame <- data.frame(domain, site, solute, flux_calc, flux_calc_dt, flux_calc_tz)
+      } else {
+        this_flux_frame <- c(domain, site, solute, flux_calc, flux_calc_dt, flux_calc_tz)
+        main_flux_frame <- rbind(main_flux_frame, this_flux_frame)
+      }
+      
+      fp <- glue(file.path('data/ms/main_flux_tracker.csv'))
+      write_csv(main_flux_frame, fp)
+      
+      file_path <- glue('{directory}/{s}.feather',
+                        s = site_code)
+      
       tryCatch(
         expr = {
           cat(glue('---- STEP_7_SUCCESS: {target_solute} complete'), file = log_fp, sep = "\n", append = TRUE)
@@ -694,6 +774,8 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
           cat(glue('---- STEP_7_ERROR: {target_solute} failed'), file = log_fp, sep = "\n", append = TRUE)
         }
       )
+    
+      
     } # end solute loop
       
     directory <- glue(file.path(data_dir,'stream_flux'))
@@ -703,6 +785,7 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
     
     file_path <- glue('{directory}/{s}.feather',
                       s = site_code)
+    
     
     cat(glue('-- STEP_8: {site_code} flux attempting write'), file = log_fp, sep = "\n", append = TRUE)
     tryCatch(
@@ -714,7 +797,16 @@ foreach(index = 4:length(domains), .packages = c('tidyverse', 'feather', 'glue',
         cat(glue('-- STEP_8_ERROR: {site_code} flux failed to write to file'), file = log_fp, sep = "\n", append = TRUE)
       }
     )
+    
+    end.tm <- Sys.time()
+    end.tz <- Sys.timezone()
+    end.dt <- Sys.Date()
+    
+    cat(glue('STEP_8: {site_code} annual flux\n'), file = log_fp, sep = "\n")
+    cat(glue('end, time: {end.tm} {end.tz}\ndate:{end.dt}'), file = log_fp, sep = "\n", append = TRUE)
+    
   } # end site loop (for loop)
 } # end domain loop
 
 stopCluster(cl)
+rstudioapi::restartSession()
